@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Visitor Permission</title>
+  
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    body {
+      background-color: #f0f6ff;
+      font-family: Arial, sans-serif;
+    }
+
+    /* Card Box */
+    .card-box {
+      background: #fff;
+      max-width: 850px;
+      margin: 50px auto;
+      padding: 0; /* remove padding to allow header full width */
+      border-radius: 12px;
+      border: 2px solid #007bff;
+      box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+    }
+
+    /* Header with dark blue background */
+    .form-header {
+      background: #003366; /* Dark blue */
+      color: #fff;
+      text-align: center;
+      padding: 20px;
+      border-radius: 10px 10px 0 0;
+    }
+
+    .form-header h2 {
+      margin: 0;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .form-header p {
+      margin: 5px 0 0;
+      font-size: 15px;
+      opacity: 0.9;
+    }
+
+    /* Form Section Padding */
+    .form-content {
+      padding: 30px;
+    }
+
+    /* Form fields */
+    .form-label {
+      font-weight: 600;
+      color: #333;
+    }
+
+    .form-control {
+      border-radius: 8px;
+      border: 1px solid #007bff;
+      transition: 0.3s;
+    }
+
+    .form-control:focus {
+      border-color: #0056b3;
+      box-shadow: 0 0 8px rgba(0,123,255,0.3);
+    }
+
+    /* Submit button */
+    .btn-primary {
+      background: #007bff;
+      border: none;
+      padding: 10px 25px;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: 0.3s;
+    }
+    .btn-primary:hover {
+      background: #0056b3;
+      transform: scale(1.05);
+    }
+
+    /* Table Styling */
+    table {
+      margin-top: 20px;
+      border: 1px solid #007bff;
+    }
+    thead {
+      background: #007bff;
+      color: #fff;
+    }
+    tbody tr:hover {
+      background: rgba(255, 0, 0, 0.1); /* red hover */
+      transition: 0.3s;
+    }
+    .table-bordered td, .table-bordered th {
+      border: 1px solid #007bff;
+    }
+
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="card-box">
+    
+    <!-- Dark Blue Header -->
+    <div class="form-header">
+      <h2>Visitor Permission Form</h2>
+      <p>Manage visitor entries securely & easily</p>
+    </div>
+
+    <!-- Form Content -->
+    <div class="form-content">
+      <form action="/visiter" method="POST">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Flat Number</label>
+            <input type="text" class="form-control" name="vfnum" value="{{ vfnun }}" placeholder="Enter Flat Number">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Owner Name</label>
+            <input type="text" class="form-control" name="vfowner" value="{{ vfowner }}" placeholder="Owner's Name">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Visitor Name</label>
+            <input type="text" class="form-control" name="vname" value="{{ vname }}" placeholder="Visitor's Name">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Visitor Work</label>
+            <input type="text" class="form-control" name="vwork" value="{{ vwork }}" placeholder="Purpose of Visit">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Visitor In Time</label>
+            <input type="datetime-local" class="form-control" name="vintt">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Visitor Out Time</label>
+            <input type="datetime-local" class="form-control" name="voutt">
+          </div>
+
+          <div class="col-md-12">
+            <label class="form-label">Owner Response</label>
+            <input type="text" class="form-control" value="{{ a }}" placeholder="Allowed? Yes/No">
+          </div>
+
+          <div class="col-12 text-center mt-3">
+            <button type="submit" class="btn btn-primary px-4">Submit</button>
+          </div>
+        </div>
+      </form>
+
+      <!-- Visitor Table -->
+      {% if vallrecord %}
+      <div class="table-responsive">
+        <table class="table table-bordered mt-4 text-center">
+          <thead>
+            <tr>
+              <th>S.No</th>
+              <th>Flat No</th>
+              <th>Owner</th>
+              <th>Visitor</th>
+              <th>Work</th>
+              <th>In Time</th>
+              <th>Out Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for record in vallrecord %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ record.vfnum }}</td>
+              <td>{{ record.vfowner }}</td>
+              <td>{{ record.vname }}</td>
+              <td>{{ record.vwork }}</td>
+              <td>{{ record.v_in }}</td>
+              <td>{{ record.v_out }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

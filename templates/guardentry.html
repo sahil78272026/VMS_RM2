@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Guard Register</title>
+    
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Royal Blue Classic Custom Style -->
+    <style>
+      body {
+        font-family: "Segoe UI", sans-serif;
+        background: linear-gradient(135deg, #002147, #003366, #004080);
+        color: #fff;
+        min-height: 100vh;
+      }
+      h3 {
+        margin-top: 20px;
+        font-weight: bold;
+        color: #f5f5f5;
+        text-shadow: 1px 1px 3px rgba(0,0,0,0.4);
+      }
+      .form-container {
+        background: #ffffff;
+        color: #000;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        max-width:800px;
+        margin: 30px auto;
+      }
+      .btn-primary {
+        background-color: #003366;
+        border: none;
+      }
+      .btn-primary:hover {
+        background-color: #001f4d;
+      }
+      table {
+        background: #fff;
+        color: #000;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      thead {
+        background: #003366;
+        color: #fff;
+      }
+      tbody tr:nth-child(even) {
+        background-color: #f0f6ff;
+      }
+      .table-container {
+        max-width: 900px;
+        margin: 30px auto;
+        padding: 20px;
+        background: rgba(255,255,255,0.9);
+        border-radius: 10px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <center>
+      <h3>Guard Register</h3>
+    </center>
+
+    <!-- Form Card -->
+    <div class="form-container">
+      <form action="/guardentry" method="POST" class="mb-4">
+        <div class="mb-3">
+          <label for="gsn" class="form-label">Guard ID</label>
+          <input type="number" class="form-control" name="gsn" required>
+        </div>
+
+        <div class="mb-3">
+          <label for="guardName" class="form-label">Guard Name</label>
+          <input type="text" class="form-control" name="guname" required>
+        </div>
+
+        <div class="mb-3">
+          <label for="Guard" class="form-label">Guard Password</label>
+          <input type="password" class="form-control" name="gpw" required>
+        </div>
+
+        <div class="mb-3">
+          <label for="mobil" class="form-label">Guard Mobile Number</label>
+          <input type="text" class="form-control" name="gm" required>
+        </div>
+
+    <button type="submit" name="action" value="add" class="btn btn-success w-25">Add New Guard</button>
+    <button type="submit" name="action" value="delete" class="btn btn-danger w-25">Delete Guard</button>
+    <button type="submit" name="action" value="update" class="btn btn-warning w-25">Update Guard </button>
+
+      </form>
+    </div>
+
+    <!-- Table Section -->
+    <div class="table-container">
+      <h4 class="text-center text-dark">Registered Guards</h4>
+      <table class="table table-striped table-hover text-center">
+        <thead>
+          <tr>
+            <th scope="col">Guard Id</th>
+            <th scope="col">Guard User Name</th>
+            <th scope="col">Guard Password</th>
+            <th scope="col">Guard Mobile Number</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in allrecord %}
+          <tr>
+            <td>{{ record.gsn }}</td>
+            <td>{{ record.guname }}</td>
+            <td>{{ record.gpassword }}</td>
+            <td>{{ record.gmobile }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  </body>
+</html>
