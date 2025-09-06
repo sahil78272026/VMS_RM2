@@ -1,21 +1,22 @@
 from flask import Flask, render_template,request
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from flask_migrate import Migrate
 
 app = Flask(__name__)
 
 # Use one database (you can combine both tables in one)
 app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///mydb4.db"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
 db = SQLAlchemy(app)
 
+migrate = Migrate(app, db)
 class Flats(db.Model):
     fsno= db.Column(db.Integer, primary_key=True)
     fnum = db.Column(db.Integer, nullable=False)
     fowner = db.Column(db.String(100), nullable=False)
-    
-   
+
+
 
 class VReg(db.Model):
     __tablename__ = 'v_reg'
@@ -29,7 +30,7 @@ class VReg(db.Model):
 
 
 class guard(db.Model):
-    __tablename__ = 'guard'   
+    __tablename__ = 'guard'
     gsn = db.Column(db.Integer, primary_key=True)
     guname = db.Column(db.String(100), nullable=False)
     gpassword = db.Column(db.String(100),nullable=False)
@@ -71,14 +72,14 @@ def admin_l():
 @app.route('/visiter', methods=['GET','POST'])
 def visiter():
     if request.method=='POST':
-       
-        vfn = request.form['vfnum'] 
+
+        vfn = request.form['vfnum']
         vfo = request.form['vfowner']
         vn = request.form['vname']
         vw = request.form['vwork']
         vi = request.form['vintt']
         vo = request.form['voutt']
-        
+
         vrecord=VReg(vfnum=vfn,vfowner=vfo,vname=vn,vwork=vw,v_in=vi,v_out=vo)
         db.session.add(vrecord)
         db.session.commit()
@@ -87,13 +88,13 @@ def visiter():
 
 @app.route('/flatentry', methods=['GET','POST'])
 def flatentry():
-    action = request.form.get('action') 
+    action = request.form.get('action')
 
     if request.method=='POST':
-       
-        fn = request.form['fnum'] 
+
+        fn = request.form['fnum']
         fo = request.form['fowner']
-        
+
         if action=="add" :
             record=Flats(fnum=fn,fowner=fo)
             db.session.add(record)
@@ -122,10 +123,10 @@ def flatentry():
 @app.route('/flat', methods=['GET','POST'])
 def flat():
     if request.method=='POST':
-       
-        fn = request.form['fnum'] 
+
+        fn = request.form['fnum']
         fo = request.form['fowner']
-        
+
         record=Flats(fnum=fn,fowner=fo)
         db.session.add(record)
         db.session.commit()
@@ -142,7 +143,7 @@ def check():
 
         flat = Flats.query.filter_by(fnum=fn).first()
         if flat:
-            
+
             return render_template('flat.html', flat=flat,vn=vn,vw=vw)
         else:
             return "Flat number not found"
@@ -164,12 +165,12 @@ def acheck():
 @app.route('/guardentry', methods=['GET', 'POST'])
 def guardentry():
     if request.method == 'POST':
-        action = request.form.get('action') 
+        action = request.form.get('action')
         gsn = request.form.get('gsn')
         gun = request.form.get('guname')
         gpw = request.form.get('gpw')
         gm  = request.form.get('gm')
-     
+
 
         if action == "add":
             new_guard = guard(gsn=gsn, guname=gun, gpassword=gpw, gmobile=gm)
@@ -206,9 +207,9 @@ def result():
     d=request.form['vn']
     e=request.form['vw']
 
-    
+
     if a=="yes":
-        
+
         return render_template('visiter.html',a=a,vfnun=b,vfowner=c,vname=d,vwork=e)
     else:
         return "Permission denied or invalid answer"
@@ -225,16 +226,16 @@ def glogin():
 
         x = guard.query.filter_by(guname=a).first()
 
-        if x and x.gpassword == b:  
+        if x and x.gpassword == b:
             return render_template('visitercheckhtml')
         else:
             return "Permission denied or invalid answer"
-    
-    
-    return render_template('glogin.html')  
-  
+
+
+    return render_template('glogin.html')
+
 if __name__ == "__main__":
     with app.app_context():
-        db.create_all() 
+        db.create_all()
     app.run(debug=True)
 
