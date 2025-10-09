@@ -117,8 +117,18 @@ def flatentry():
                 print("Flat updated successfully!")
             else:
                 print("Flat not found!")
-    allrecord=Flats.query.all()
-    return render_template('flatentry.html',allrecord=allrecord)
+    allrecord = Flats.query.order_by(Flats.fnum).all()
+    allrecord = Flats.query.order_by(Flats.fnum).all()
+
+    seen = set()
+    unique_flats = []
+
+    for f in allrecord:
+        key = (f.fnum, f.fowner)
+        if key not in seen:
+            seen.add(key)
+            unique_flats.append({'fsno': f.fsno, 'fnum': f.fnum, 'fowner': f.fowner})
+    return render_template('flatentry.html',allrecord=unique_flats)
 
 @app.route('/flat', methods=['GET','POST'])
 def flat():
@@ -233,6 +243,23 @@ def glogin():
 
 
     return render_template('glogin.html')
+
+from flask import jsonify
+@app.route('/api/flats')
+def get_flats():
+    flats = Flats.query.order_by(Flats.fnum).all()
+
+
+    seen = set()
+    unique_flats = []
+
+    for f in flats:
+        if f.fnum not in seen:
+            seen.add(f.fnum)
+            unique_flats.append({'fsno': f.fsno, 'fnum': f.fnum})
+
+    return jsonify(unique_flats)
+
 
 if __name__ == "__main__":
     with app.app_context():
