@@ -2,11 +2,17 @@ from flask import Flask, render_template,request
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from flask_migrate import Migrate
-
+import os
+from dotenv import load_dotenv
+load_dotenv()
 app = Flask(__name__)
 
+
 # Use one database (you can combine both tables in one)
-app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///mydb4.db"
+# app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///mydb4.db"
+print(os.environ.get('DATABASE_URL'))
+app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://sahil:JdSmvVcEqTmfTN0BKVEuOvZj2j6yW6Bx@dpg-d3k7keruibrs73f30560-a.singapore-postgres.render.com/vmsrm2"
+# app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
