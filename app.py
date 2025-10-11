@@ -1,21 +1,16 @@
-from flask import Flask, render_template,request
+from flask import Flask, render_template,request, send_file
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from flask_migrate import Migrate
-import os
-from dotenv import load_dotenv
-load_dotenv()
+import os, qrcode, io
+from settings import DATABASE_URL
+
+
 app = Flask(__name__)
-
-
-# Use one database (you can combine both tables in one)
-# app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///mydb4.db"
-print(os.environ.get('DATABASE_URL'))
-app.config['SQLALCHEMY_DATABASE_URI'] = "postgresql://sahil:JdSmvVcEqTmfTN0BKVEuOvZj2j6yW6Bx@dpg-d3k7keruibrs73f30560-a.singapore-postgres.render.com/vmsrm2"
-# app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
 
+db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 class Flats(db.Model):
     fsno= db.Column(db.Integer, primary_key=True)
@@ -123,7 +118,7 @@ def flatentry():
                 print("Flat updated successfully!")
             else:
                 print("Flat not found!")
-    allrecord = Flats.query.order_by(Flats.fnum).all()
+
     allrecord = Flats.query.order_by(Flats.fnum).all()
 
     seen = set()
@@ -265,6 +260,55 @@ def get_flats():
             unique_flats.append({'fsno': f.fsno, 'fnum': f.fnum})
 
     return jsonify(unique_flats)
+
+
+@app.route('/generate_qr')
+def generate_qr():
+    url = "https://vms-rm2.onrender.com/visitor_entry"
+    qr_img = qrcode.make(url)
+    buf = io.BytesIO()
+    qr_img.save(buf, format='PNG')
+    buf.seek(0)
+    return send_file(buf, mimetype='image/png')
+
+
+# @app.route('/visitor_entry')
+# def visitor_entry():
+#     flats = Flats.query.order_by(Flats.fnum).all()  # if you want dropdown
+#     return render_template('visitor_entry.html', flats=flats)
+
+
+from flask import Blueprint, request, render_template, redirect, url_for
+from datetime import datetime
+# from extensions import db
+# from models import VReg
+
+
+@app.route("/visitor-entry", methods=["GET", "POST"])
+def visitor_entry():
+    if request.method == "POST":
+        vfnum = request.form.get("vfnum")
+        vfowner = request.form.get("vfowner")
+        vname = request.form.get("vname")
+        vwork = request.form.get("vwork")
+
+        new_visitor = VReg(
+            vfnum=vfnum,
+            vfowner=vfowner,
+            vname=vname,
+            vwork=vwork,
+            v_in=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            v_out=""
+        )
+        db.session.add(new_visitor)
+        db.session.commit()
+        return "Visitor entry recorded successfully!"
+
+    # for GET
+    flats = Flats.query.order_by(Flats.fnum).all()
+    return render_template("visitor_entry.html", flats=flats)
+
+
 
 
 if __name__ == "__main__":
