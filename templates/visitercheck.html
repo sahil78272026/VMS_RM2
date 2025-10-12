@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Visitor Entry Check Form</title>
-  
+
   <!-- Bootstrap for consistency -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
 
@@ -82,7 +82,7 @@
 
 <div class="container">
   <div class="card-box">
-    
+
     <!-- Dark Blue Header -->
     <div class="form-header">
       <h2>Visitor Entry Check</h2>
@@ -92,7 +92,7 @@
     <!-- Form -->
     <div class="form-content">
       <form action="/check" method="POST">
-        
+
         <div class="mb-3">
           <label for="vn" class="form-label">Visitor Name</label>
           <input type="text" class="form-control" name="vn" id="vn" placeholder="Enter visitor name">
@@ -103,16 +103,37 @@
           <input type="text" class="form-control" name="vw" id="vw" placeholder="Purpose of visit">
         </div>
 
-        <div class="mb-3">
-          <label for="vfn" class="form-label">Visitor Flat Number</label>
-          <input type="text" class="form-control" name="vfn" id="vfn" placeholder="Enter flat number">
-        </div>
+        <div class="col-md-6">
+          <label for="fnum" class="form-label">Flat Number</label>
+          <select class="form-select" name="fnum" id="fnum" required>
+            <option value="">Select Flat</option>
+          </select>
 
+        </div>
+        <br>
         <button type="submit" class="btn btn-primary">Submit</button>
       </form>
     </div>
   </div>
 </div>
+<script>
+  async function loadFlats() {
+    const response = await fetch('/api/flats');
+    const flats = await response.json();
 
+    const flatSelect = document.getElementById('fnum');
+    flatSelect.innerHTML = '<option value="">Select Flat</option>';
+
+    flats.forEach(flat => {
+      const option = document.createElement('option');
+      option.value = flat.fnum;  // or flat.id depending on your DB
+      option.textContent = flat.fnum;  // the actual flat number
+      flatSelect.appendChild(option);
+    });
+  }
+
+  // Load flats when page loads
+  document.addEventListener('DOMContentLoaded', loadFlats);
+</script>
 </body>
 </html>

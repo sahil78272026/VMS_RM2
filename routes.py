@@ -40,14 +40,14 @@ def admin_l():
 def visiter():
     if request.method=='POST':
 
-        vfn = request.form['vfnum']
+
         vfo = request.form['vfowner']
         vn = request.form['vname']
         vw = request.form['vwork']
         vi = request.form['vintt']
         vo = request.form['voutt']
 
-        vrecord=Visitors(vfnum=vfn,vfowner=vfo,vname=vn,vwork=vw,v_in=vi,v_out=vo)
+        vrecord=Visitors(flat_id=1, vfowner=vfo,vname=vn,vwork=vw,v_in=vi,v_out=vo, guard_id=1)
         db.session.add(vrecord)
         db.session.commit()
     vallrecord=Visitors.query.all()
@@ -113,7 +113,7 @@ def flat():
 @main_bp.route('/check',methods=['GET','POST'])
 def check():
     if request.method=='POST':
-        fn=request.form['vfn']
+        fn=request.form['fnum']
         vn=request.form['vn']
         vw=request.form['vw']
 
@@ -125,6 +125,21 @@ def check():
         else:
             return "Flat number not found"
     return "Please submit the form"
+
+@main_bp.route('/result',methods=['GET','POST'])
+def result():
+    a=request.form['ans']
+    b=request.form['fn']
+    c=request.form['fo']
+    d=request.form['vn']
+    e=request.form['vw']
+
+
+    if a=="yes":
+
+        return render_template('visiter.html',a=a,vfnun=b,vfowner=c,vname=d,vwork=e)
+    else:
+        return "Permission denied or invalid answer"
 
 
 @main_bp.route('/admincheck', methods=['GET', 'POST'])
@@ -213,21 +228,6 @@ def glogin():
     return render_template('glogin.html')
 
 
-@main_bp.route('/result',methods=['GET','POST'])
-def result():
-    a=request.form['ans']
-    b=request.form['fn']
-    c=request.form['fo']
-    d=request.form['vn']
-    e=request.form['vw']
-
-
-    if a=="yes":
-
-        return render_template('visiter.html',a=a,vfnun=b,vfowner=c,vname=d,vwork=e)
-    else:
-        return "Permission denied or invalid answer"
-
 
 @main_bp.route('/api/flats')
 def get_flats():
@@ -238,7 +238,7 @@ def get_flats():
     for f in flats:
         if f.fnum not in seen:
             seen.add(f.fnum)
-            unique_flats.append({'fsno': f.fsno, 'fnum': f.fnum})
+            unique_flats.append({'fsno': f.id, 'fnum': f.fnum})
 
     return jsonify(unique_flats)
 
@@ -340,3 +340,41 @@ def resident_logout():
     session.clear()
     flash("Logged out successfully.", "info")
     return redirect(url_for("main.resident_login"))
+
+
+@main_bp.route("/api/pending_visitors", methods=["GET"])
+def get_pending_visitors():
+    # pending_visitors = Visitors.query.filter_by(approved=False).all()
+    pending_visitors = Visitors.query.all()
+    data = [
+        {
+            "id": v.id,
+            "name": v.vname,
+            "flat": v.flat.fnum,
+            "owner": v.flat.fowner,
+            "purpose": v.vwork,
+            "in_time": v.v_in,
+        }
+        for v in pending_visitors
+    ]
+    return jsonify(data)
+
+
+@main_bp.route("/api/approve_visitor/<int:visitor_id>", methods=["POST"])
+def approve_visitor(visitor_id):
+    visitor = Visitors.query.get(visitor_id)
+    if visitor:
+        visitor.approved = True
+        db.session.commit()
+        return jsonify({"status": "approved"})
+    return jsonify({"error": "Visitor not found"}), 404
+
+
+@main_bp.route("/api/reject_visitor/<int:visitor_id>", methods=["POST"])
+def reject_visitor(visitor_id):
+    visitor = Visitors.query.get(visitor_id)
+    if visitor:
+        db.session.delete(visitor)
+        db.session.commit()
+        return jsonify({"status": "rejected"})
+    return jsonify({"error": "Visitor not found"}), 404

@@ -5,10 +5,66 @@
   <title>Resident Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+
 <body class="p-4">
-  <div class="container mt-5 text-center">
-    <h3>Welcome, {{ name }} 👋</h3>
-    <a href="{{ url_for('main.resident_logout') }}" class="btn btn-danger mt-3">Logout</a>
+  <div class="container mt-4">
+    <h2 class="text-center mb-4">Pending Visitor Approvals</h2>
+
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Visitor Name</th>
+          <th>Flat</th>
+          <th>Owner</th>
+          <th>Purpose</th>
+          <th>In Time</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="visitorTableBody">
+        <!-- Data will be loaded dynamically -->
+      </tbody>
+    </table>
   </div>
+
+  <script>
+    // Function to load pending visitors
+    async function loadPendingVisitors() {
+      const response = await fetch('/api/pending_visitors');
+      const data = await response.json();
+
+      const tbody = document.getElementById('visitorTableBody');
+      tbody.innerHTML = ''; // Clear previous rows
+
+      data.forEach(visitor => {
+        const row = `
+          <tr>
+            <td>${visitor.name}</td>
+            <td>${visitor.flat}</td>
+            <td>${visitor.owner}</td>
+            <td>${visitor.purpose}</td>
+            <td>${visitor.in_time}</td>
+            <td>
+              <button class="btn btn-success btn-sm" onclick="approveVisitor(${visitor.id})">Approve</button>
+              <button class="btn btn-danger btn-sm" onclick="rejectVisitor(${visitor.id})">Reject</button>
+            </td>
+          </tr>`;
+        tbody.innerHTML += row;
+      });
+    }
+
+    async function approveVisitor(id) {
+      await fetch(`/api/approve_visitor/${id}`, { method: 'POST' });
+      loadPendingVisitors(); // Refresh list
+    }
+
+    async function rejectVisitor(id) {
+      await fetch(`/api/reject_visitor/${id}`, { method: 'POST' });
+      loadPendingVisitors(); // Refresh list
+    }
+
+    // Load on page ready
+    document.addEventListener('DOMContentLoaded', loadPendingVisitors);
+  </script>
 </body>
 </html>
