@@ -19,6 +19,16 @@
             <h3 class="text-center mb-4">Visitor Entry Form</h3>
 
             <form action="/visitor-entry" method="POST">
+              <!-- Flat Selection -->
+              <div class="mb-3">
+                <label for="flat_id" class="form-label">Flat Number</label>
+                <select name="flat_id" id="flat_id" class="form-select" required>
+                  <option value="">Select Flat</option>
+                  {% for flat in flats %}
+                    <option value="{{ flat.id }}">{{ flat.fnum }} - {{ flat.fowner }}</option>
+                  {% endfor %}
+                </select>
+              </div>
 
               <!-- Visitor Name -->
               <div class="mb-3">
@@ -32,22 +42,18 @@
                 <input type="text" class="form-control" id="vwork" name="vwork" required>
               </div>
 
-              <!-- Flat Selection -->
               <div class="mb-3">
-                <label for="vfnum" class="form-label">Flat Number</label>
-                <select name="vfnum" id="vfnum" class="form-select" required>
-                  <option value="">Select Flat</option>
-                  {% for flat in flats %}
-                    <option value="{{ flat.fnum }}">{{ flat.fnum }} - {{ flat.fowner }}</option>
+                <label for="guard_id" class="form-label">On Duty Guard</label>
+                <select name="guard_id" id="guard_id" class="form-select" required>
+                  <option value="">Select Guard</option>
+                  {% for guard in guards %}
+                    <option value="{{ guard.id }}">{{ guard.guname }}</option>
                   {% endfor %}
                 </select>
               </div>
 
-              <!-- Owner Name (Auto-filled optional) -->
-              <div class="mb-3">
-                <label for="vfowner" class="form-label">Owner Name</label>
-                <input type="text" class="form-control" id="vfowner" name="vfowner" required>
-              </div>
+
+
 
               <!-- Submit Button -->
               <button type="submit" class="btn btn-primary w-100">Submit Visitor Info</button>

@@ -1,5 +1,6 @@
-from models import *
-from flask import render_template, request, send_file, Blueprint
+from models import Flats, Visitors, Guard, Residents
+from extensions import db
+from flask import request, session, render_template, send_file, jsonify, Blueprint, flash, redirect, url_for
 from datetime import datetime
 import io, qrcode
 
@@ -13,7 +14,7 @@ def hello():
 
 @main_bp.route('/ventry')
 def ventry():
-    all_record = VReg.query.all()
+    all_record = Visitors.query.all()
     return render_template('visiterreg.html', vallrecord=all_record)
 
 
@@ -21,9 +22,7 @@ def ventry():
 def home():
     return render_template('glogin.html')
 
-@main_bp.route('/gourdl')
-def gourd_l():
-    return render_template('glogin.html')
+
 
 @main_bp.route('/vlogin')
 def visiter_l():
@@ -48,10 +47,10 @@ def visiter():
         vi = request.form['vintt']
         vo = request.form['voutt']
 
-        vrecord=VReg(vfnum=vfn,vfowner=vfo,vname=vn,vwork=vw,v_in=vi,v_out=vo)
+        vrecord=Visitors(vfnum=vfn,vfowner=vfo,vname=vn,vwork=vw,v_in=vi,v_out=vo)
         db.session.add(vrecord)
         db.session.commit()
-    vallrecord=VReg.query.all()
+    vallrecord=Visitors.query.all()
     return render_template('visiter.html',vallrecord=vallrecord)
 
 @main_bp.route('/flatentry', methods=['GET','POST'])
@@ -95,7 +94,7 @@ def flatentry():
         key = (f.fnum, f.fowner)
         if key not in seen:
             seen.add(key)
-            unique_flats.main_bpend({'fsno': f.fsno, 'fnum': f.fnum, 'fowner': f.fowner})
+            unique_flats.append({'fsno': f.fsno, 'fnum': f.fnum, 'fowner': f.fowner})
     return render_template('flatentry.html',allrecord=unique_flats)
 
 @main_bp.route('/flat', methods=['GET','POST'])
@@ -134,30 +133,41 @@ def acheck():
         auname = request.form['aun']
         apassword = request.form['ap']
 
-        if auname == "neetu" and apassword == "123":
+        if auname == "admin" and apassword == "admin":
             return render_template('adminpage.html')
         else:
             return "Admin not found"
     return "plese submit the form"
 
+#******************Guard************************
+
+@main_bp.route('/gourdl')
+def gourd_l():
+    flats = Flats.query.order_by(Flats.fnum).all()
+    if session.get('guard_logged_in'):
+        return render_template("visitor_entry.html", flats=flats)
+
+    return render_template('glogin.html')
+
+
 @main_bp.route('/guardentry', methods=['GET', 'POST'])
 def guardentry():
     if request.method == 'POST':
         action = request.form.get('action')
-        gsn = request.form.get('gsn')
+        id = request.form.get('id')
         gun = request.form.get('guname')
         gpw = request.form.get('gpw')
         gm  = request.form.get('gm')
 
 
         if action == "add":
-            new_guard = guard(gsn=gsn, guname=gun, gpassword=gpw, gmobile=gm)
+            new_guard = Guard(id=id, guname=gun, gpassword=gpw, gmobile=gm)
             db.session.add(new_guard)
             db.session.commit()
             print("Guard added successfully!")
 
         elif action == "delete":
-            record = guard.query.get(gsn)
+            record = Guard.query.get(id)
             if record:
                 db.session.delete(record)
                 db.session.commit()
@@ -165,7 +175,7 @@ def guardentry():
                 print("Guard not found!")
 
         elif action == "update":
-            record = guard.query.get(gsn)
+            record = Guard.query.get(id)
             if record:
                 record.guname = gun
                 record.gpassword = gpw
@@ -174,8 +184,34 @@ def guardentry():
             else:
                 print("Guard not found!")
 
-    allrecord = guard.query.all()
+    allrecord = Guard.query.all()
     return render_template('guardentry.html', allrecord=allrecord)
+
+
+@main_bp.route('/glogin', methods=['GET', 'POST'])
+def glogin():
+    flats = Flats.query.order_by(Flats.fnum).all()
+
+    if request.method == 'POST':
+        a = request.form['guname']
+        b = request.form['gpw']
+
+        if not a or not b:
+            return "Please enter both username and password"
+
+        x = Guard.query.filter_by(guname=a).first()
+
+        if x and x.gpassword == b:
+            session['guard_logged_in'] = True
+            return render_template("visitor_entry.html", flats=flats)
+        else:
+            return "Permission denied or invalid answer"
+
+    if session.get('guard_logged_in'):
+        return render_template("visitor_entry.html", flats=flats)
+
+    return render_template('glogin.html')
+
 
 @main_bp.route('/result',methods=['GET','POST'])
 def result():
@@ -193,31 +229,9 @@ def result():
         return "Permission denied or invalid answer"
 
 
-@main_bp.route('/glogin', methods=['GET', 'POST'])
-def glogin():
-    if request.method == 'POST':
-        a = request.form['guname']
-        b = request.form['gpw']
-
-        if not a or not b:
-            return "Please enter both username and password"
-
-        x = guard.query.filter_by(guname=a).first()
-
-        if x and x.gpassword == b:
-            return render_template('visitercheckhtml')
-        else:
-            return "Permission denied or invalid answer"
-
-
-    return render_template('glogin.html')
-
-from flask import jsonify
 @main_bp.route('/api/flats')
 def get_flats():
     flats = Flats.query.order_by(Flats.fnum).all()
-
-
     seen = set()
     unique_flats = []
 
@@ -239,31 +253,22 @@ def generate_qr():
     return send_file(buf, mimetype='image/png')
 
 
-# @app.route('/visitor_entry')
-# def visitor_entry():
-#     flats = Flats.query.order_by(Flats.fnum).all()  # if you want dropdown
-#     return render_template('visitor_entry.html', flats=flats)
-
-
-
-# from extensions import db
-# from models import VReg
-
 @main_bp.route("/visitor-entry", methods=["GET", "POST"])
 def visitor_entry():
     if request.method == "POST":
-        vfnum = request.form.get("vfnum")
-        vfowner = request.form.get("vfowner")
+        flat_id = request.form.get("flat_id")
         vname = request.form.get("vname")
         vwork = request.form.get("vwork")
+        guard_id = request.form.get('guard_id')
 
-        new_visitor = VReg(
-            vfnum=vfnum,
-            vfowner=vfowner,
+        new_visitor = Visitors(
+            flat_id=flat_id,
+            vfowner="123",
             vname=vname,
             vwork=vwork,
+            guard_id=guard_id,
             v_in=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            v_out=""
+            v_out=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
         db.session.add(new_visitor)
         db.session.commit()
@@ -271,4 +276,67 @@ def visitor_entry():
 
     # for GET
     flats = Flats.query.order_by(Flats.fnum).all()
-    return render_template("visitor_entry.html", flats=flats)
+    guards = Guard.query.order_by(Guard.guname).all()
+
+    return render_template("visitor_entry.html", flats=flats, guards=guards)
+
+
+@main_bp.route("/resident/register", methods=["GET", "POST"])
+def resident_register():
+    if request.method == "POST":
+        name = request.form["name"]
+        mobile = request.form["mobile"]
+        email = request.form["email"]
+        password = request.form["password"]
+        flat_id = request.form["flat_id"]
+
+        existing = Residents.query.filter_by(mobile=mobile).first()
+        if existing:
+            flash("Mobile number already registered!", "danger")
+            return redirect(url_for("main.resident_register"))
+
+        resident = Residents(name=name, mobile=mobile, email=email, flat_id=flat_id)
+        resident.set_password(password)
+        db.session.add(resident)
+        db.session.commit()
+
+        flash("Registration successful! Please log in.", "success")
+        return redirect(url_for("main.resident_login"))
+
+    flats = Flats.query.all()
+    return render_template("resident_register.html", flats=flats)
+
+
+# 🔹 Login Page
+@main_bp.route("/resident/login", methods=["GET", "POST"])
+def resident_login():
+    if request.method == "POST":
+        mobile = request.form["mobile"]
+        password = request.form["password"]
+
+        resident = Residents.query.filter_by(mobile=mobile).first()
+        if resident and resident.check_password(password):
+            session["resident_id"] = resident.id
+            session["resident_name"] = resident.name
+            flash("Logged in successfully!", "success")
+            return redirect(url_for("main.resident_dashboard"))
+        else:
+            flash("Invalid credentials!", "danger")
+
+    return render_template("resident_login.html")
+
+
+# 🔹 Dashboard
+@main_bp.route("/resident/dashboard")
+def resident_dashboard():
+    if "resident_id" not in session:
+        return redirect(url_for("main.resident_login"))
+    return render_template("resident_dashboard.html", name=session.get("resident_name"))
+
+
+# 🔹 Logout
+@main_bp.route("/resident/logout")
+def resident_logout():
+    session.clear()
+    flash("Logged out successfully.", "info")
+    return redirect(url_for("main.resident_login"))
