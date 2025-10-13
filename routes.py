@@ -12,46 +12,32 @@ main_bp = Blueprint('main', __name__)
 def hello():
     return render_template('home.html')
 
-@main_bp.route('/ventry')
-def ventry():
-    all_record = Visitors.query.all()
-    return render_template('visiterreg.html', vallrecord=all_record)
 
 
-@main_bp.route('/home')
-def home():
-    return render_template('glogin.html')
+#******************ADMIN*************************
+@main_bp.route('/adminlogin')
+def admin_l():
+    return render_template('admin.html')
 
 
+@main_bp.route('/admincheck', methods=['GET', 'POST'])
+def acheck():
+    if request.method == 'POST':
+        auname = request.form['aun']
+        apassword = request.form['ap']
 
-@main_bp.route('/vlogin')
-def visiter_l():
-    return render_template('visitercheck.html')
+        if auname == "admin" and apassword == "admin":
+            return render_template('adminpage.html')
+        else:
+            return "Admin not found"
+    return "plese submit the form"
+
+#*********************FLAT****************************
 
 @main_bp.route('/flatlogin')
 def flat_l():
     return render_template('flatentry.html')
 
-@main_bp.route('/adminlogin')
-def admin_l():
-    return render_template('admin.html')
-
-@main_bp.route('/visiter', methods=['GET','POST'])
-def visiter():
-    if request.method=='POST':
-
-
-        vfo = request.form['vfowner']
-        vn = request.form['vname']
-        vw = request.form['vwork']
-        vi = request.form['vintt']
-        vo = request.form['voutt']
-
-        vrecord=Visitors(flat_id=1, vfowner=vfo,vname=vn,vwork=vw,v_in=vi,v_out=vo, guard_id=1)
-        db.session.add(vrecord)
-        db.session.commit()
-    vallrecord=Visitors.query.all()
-    return render_template('visiter.html',vallrecord=vallrecord)
 
 @main_bp.route('/flatentry', methods=['GET','POST'])
 def flatentry():
@@ -133,8 +119,6 @@ def result():
     c=request.form['fo']
     d=request.form['vn']
     e=request.form['vw']
-
-
     if a=="yes":
 
         return render_template('visiter.html',a=a,vfnun=b,vfowner=c,vname=d,vwork=e)
@@ -142,26 +126,12 @@ def result():
         return "Permission denied or invalid answer"
 
 
-@main_bp.route('/admincheck', methods=['GET', 'POST'])
-def acheck():
-    if request.method == 'POST':
-        auname = request.form['aun']
-        apassword = request.form['ap']
 
-        if auname == "admin" and apassword == "admin":
-            return render_template('adminpage.html')
-        else:
-            return "Admin not found"
-    return "plese submit the form"
 
-#******************Guard************************
+#******************GUARD************************
 
-@main_bp.route('/gourdl')
-def gourd_l():
-    flats = Flats.query.order_by(Flats.fnum).all()
-    if session.get('guard_logged_in'):
-        return render_template("visitor_entry.html", flats=flats)
-
+@main_bp.route('/home')
+def home():
     return render_template('glogin.html')
 
 
@@ -228,30 +198,27 @@ def glogin():
     return render_template('glogin.html')
 
 
+@main_bp.route('/gourdl')
+def gourd_l():
+    if session.get('guard_logged_in'):
+        flats = Flats.query.order_by(Flats.fnum).all()
+        guards = Guard.query.order_by(Guard.guname).all()
+        return render_template("visitor_entry.html", flats=flats, guards=guards)
 
-@main_bp.route('/api/flats')
-def get_flats():
-    flats = Flats.query.order_by(Flats.fnum).all()
-    seen = set()
-    unique_flats = []
-
-    for f in flats:
-        if f.fnum not in seen:
-            seen.add(f.fnum)
-            unique_flats.append({'fsno': f.id, 'fnum': f.fnum})
-
-    return jsonify(unique_flats)
+    return render_template('glogin.html')
 
 
-@main_bp.route('/generate_qr')
-def generate_qr():
-    url = "https://vms-rm2.onrender.com/visitor-entry"
-    qr_img = qrcode.make(url)
-    buf = io.BytesIO()
-    qr_img.save(buf, format='PNG')
-    buf.seek(0)
-    return send_file(buf, mimetype='image/png')
 
+#*********************VISITORS**********************
+
+@main_bp.route('/ventry')
+def ventry():
+    all_record = Visitors.query.all()
+    return render_template('visiterreg.html', vallrecord=all_record)
+
+@main_bp.route('/vlogin')
+def visiter_l():
+    return render_template('visitercheck.html')
 
 @main_bp.route("/visitor-entry", methods=["GET", "POST"])
 def visitor_entry():
@@ -280,6 +247,27 @@ def visitor_entry():
 
     return render_template("visitor_entry.html", flats=flats, guards=guards)
 
+@main_bp.route('/visiter', methods=['GET','POST'])
+def visiter():
+    if request.method=='POST':
+
+
+        vfo = request.form['vfowner']
+        vn = request.form['vname']
+        vw = request.form['vwork']
+        vi = request.form['vintt']
+        vo = request.form['voutt']
+
+        vrecord=Visitors(flat_id=1, vfowner=vfo,vname=vn,vwork=vw,v_in=vi,v_out=vo, guard_id=1)
+        db.session.add(vrecord)
+        db.session.commit()
+    vallrecord=Visitors.query.all()
+    return render_template('visiter.html',vallrecord=vallrecord)
+
+
+
+#********************RESIDENTS**************************
+
 
 @main_bp.route("/resident/register", methods=["GET", "POST"])
 def resident_register():
@@ -307,7 +295,6 @@ def resident_register():
     return render_template("resident_register.html", flats=flats)
 
 
-# 🔹 Login Page
 @main_bp.route("/resident/login", methods=["GET", "POST"])
 def resident_login():
     if request.method == "POST":
@@ -378,3 +365,31 @@ def reject_visitor(visitor_id):
         db.session.commit()
         return jsonify({"status": "rejected"})
     return jsonify({"error": "Visitor not found"}), 404
+
+
+#************OTHER APIs*******************
+
+
+@main_bp.route('/api/flats')
+def get_flats():
+    flats = Flats.query.order_by(Flats.fnum).all()
+    seen = set()
+    unique_flats = []
+
+    for f in flats:
+        if f.fnum not in seen:
+            seen.add(f.fnum)
+            unique_flats.append({'fsno': f.id, 'fnum': f.fnum})
+
+    return jsonify(unique_flats)
+
+
+@main_bp.route('/generate_qr')
+def generate_qr():
+    url = "https://vms-rm2.onrender.com/visitor-entry"
+    qr_img = qrcode.make(url)
+    buf = io.BytesIO()
+    qr_img.save(buf, format='PNG')
+    buf.seek(0)
+    return send_file(buf, mimetype='image/png')
+

@@ -7,13 +7,13 @@ class Flats(db.Model):
     fnum = db.Column(db.Integer, nullable=False)
     fowner = db.Column(db.String(100), nullable=False)
 
-
 class Guard(db.Model):
     __tablename__ = 'guard'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     guname = db.Column(db.String(100), nullable=False)
     gpassword = db.Column(db.String(100),nullable=False)
     gmobile=db.Column(db.String(13),nullable=False)
+
 class Visitors(db.Model):
     __tablename__ = 'visitors'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -26,8 +26,6 @@ class Visitors(db.Model):
     v_out = db.Column(db.String(100))
     guard_id = db.Column(db.Integer, db.ForeignKey('guard.id'), nullable=False)
     guard = db.relationship(Guard, backref='visitors', lazy=True)
-
-
 
 class Residents(db.Model):
     __tablename__ = "residents"
