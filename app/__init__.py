@@ -7,6 +7,7 @@ from .residents_routes import bp as residents_bp
 from .guard_routes import bp as guards_bp
 from .qr_routes import qr_bp
 from .flat_routes import bp as flats_bp
+from .admin_routes import bp as admin_bp
 from config import Config
 
 
@@ -39,6 +40,7 @@ def create_app():
     app.register_blueprint(guards_bp, url_prefix="/api/guards")
     app.register_blueprint(qr_bp, url_prefix="/api/qr")
     app.register_blueprint(flats_bp, url_prefix="/api")
+    app.register_blueprint(admin_bp, url_prefix="/api")
 
 
 

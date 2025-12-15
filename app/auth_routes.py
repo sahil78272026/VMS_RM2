@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from .models import Resident, Guard, Visitor
+from .models import Resident, Guard, Visitor, Admin
 from .extensions import db
 from flask_jwt_extended import create_access_token
 
@@ -69,3 +69,36 @@ def guard_login():
             "name": guard.name
         }
     }
+
+
+from flask import request, jsonify
+from flask_jwt_extended import create_access_token
+from .models import Admin
+
+@bp.route("/admin/login", methods=["POST"])
+def admin_login():
+    data = request.json
+    mobile = data.get("mobile")
+    password = data.get("password")
+
+    if not mobile or not password:
+        return {"error": "Missing credentials"}, 400
+
+    admin = Admin.query.filter_by(mobile=mobile, is_active=True).first()
+
+    if not admin or not admin.check_password(password):
+        return {"error": "Invalid credentials"}, 401
+
+    access_token = create_access_token(
+        identity=str(admin.id),
+        additional_claims={"role": "admin"}
+    )
+
+    return jsonify({
+        "access_token": access_token,
+        "admin": {
+            "id": admin.id,
+            "name": admin.name
+        }
+    })
+
