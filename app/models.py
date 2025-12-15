@@ -17,12 +17,16 @@ class Resident(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     flat_id = db.Column(db.Integer, db.ForeignKey("flats.id"), nullable=False)
     flat = db.relationship("Flat", backref="residents")
+    is_primary = db.Column(db.Boolean, default=False)
 
-    def set_password(self, pw):
-        self.password_hash = generate_password_hash(pw)
+    # 🔑 NEW FIELD
+    is_approved = db.Column(db.Boolean, default=False)
 
-    def check_password(self, pw):
-        return check_password_hash(self.password_hash, pw)
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
 
 
 
@@ -77,3 +81,18 @@ class Admin(db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+class Announcement(db.Model):
+    __tablename__ = "announcements"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+
+    type = db.Column(db.String(50), nullable=False)
+    # example: INFO, ALERT, MAINTENANCE
+
+    start_time = db.Column(db.DateTime, nullable=False)
+    end_time = db.Column(db.DateTime, nullable=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

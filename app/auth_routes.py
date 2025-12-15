@@ -3,6 +3,7 @@ from .models import Resident, Guard, Visitor, Admin
 from .extensions import db
 from flask_jwt_extended import create_access_token
 
+
 bp = Blueprint("auth", __name__)
 
 @bp.route("/resident/register", methods=["POST"])
@@ -17,18 +18,37 @@ def resident_register():
 
 @bp.route("/resident/login", methods=["POST"])
 def resident_login():
-    data = request.json
-    r = Resident.query.filter_by(mobile=data["mobile"]).first()
+    data = request.json or {}
 
-    if not r or not r.check_password(data["password"]):
-        return jsonify({"error":"Invalid"}), 401
+    mobile = data.get("mobile")
+    password = data.get("password")
+
+    if not mobile or not password:
+        return jsonify({"error": "Mobile and password required"}), 400
+
+    r = Resident.query.filter_by(mobile=mobile).first()
+
+    if not r or not r.check_password(password):
+        return jsonify({"error": "Invalid credentials"}), 401
+
+    if not r.is_approved:
+        return jsonify({
+            "error": "Account pending admin approval"
+        }), 403
 
     access_token = create_access_token(
-        identity=str(r.id),   # ✅ MUST be string
+        identity=str(r.id),  # MUST be string
         additional_claims={"role": "resident"}
     )
 
-    return jsonify({"access_token": access_token})
+    return jsonify({
+        "access_token": access_token,
+        "resident": {
+            "id": r.id,
+            "name": r.name
+        }
+    }), 200
+
 
 
 @bp.route("/visitor/login", methods=["POST"])
@@ -71,15 +91,14 @@ def guard_login():
     }
 
 
-from flask import request, jsonify
-from flask_jwt_extended import create_access_token
-from .models import Admin
 
 @bp.route("/admin/login", methods=["POST"])
 def admin_login():
     data = request.json
     mobile = data.get("mobile")
     password = data.get("password")
+    print(mobile)
+    print(password)
 
     if not mobile or not password:
         return {"error": "Missing credentials"}, 400

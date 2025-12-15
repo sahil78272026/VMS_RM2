@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from .models import Visit, Flat, Guard
+from .models import Visit, Flat, Guard, Resident, Announcement
 from .extensions import db
 from datetime import datetime
 
@@ -41,16 +41,20 @@ def get_guards():
         return {"error": "forbidden"}, 403
 
     guards = Guard.query.order_by(Guard.id.desc()).all()
+    if guards:
 
-    return jsonify([
-        {
-            "id": g.id,
-            "name": g.name,
-            "mobile": g.mobile,
-            "is_active": g.is_active
-        }
-        for g in guards
-    ])
+        return jsonify([
+            {
+                "id": g.id,
+                "name": g.name,
+                "mobile": g.mobile,
+                "is_active": g.is_active
+            }
+            for g in guards
+        ])
+    else:
+        return jsonify([])
+
 
 
 @bp.route("/admin/guards", methods=["POST"])
@@ -94,3 +98,58 @@ def toggle_guard(guard_id):
         "is_active": guard.is_active
     }
 
+
+@bp.route("/admin/residents/pending", methods=["GET"])
+@jwt_required()
+def pending_residents():
+    claims = get_jwt()
+    if claims.get("role") != "admin":
+        return {"error": "forbidden"}, 403
+
+    residents = Resident.query.filter_by(is_approved=False).all()
+
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "mobile": r.mobile,
+            "flat_id": r.flat.number
+        }
+        for r in residents
+    ]
+
+@bp.route("/admin/residents/<int:id>/approve", methods=["POST"])
+@jwt_required()
+def approve_resident(id):
+    claims = get_jwt()
+    if claims.get("role") != "admin":
+        return {"error": "forbidden"}, 403
+
+    resident = Resident.query.get_or_404(id)
+    resident.is_approved = True
+    db.session.commit()
+
+    return {"message": "Resident approved"}
+
+
+@bp.route("/announcements", methods=["POST"])
+@jwt_required()
+def create_announcement():
+    claims = get_jwt()
+    if claims.get("role") != "admin":
+        return {"error": "forbidden"}, 403
+
+    data = request.json
+
+    ann = Announcement(
+        title=data["title"],
+        description=data.get("description"),
+        type=data["type"],
+        start_time=data["start_time"],
+        end_time=data["end_time"]
+    )
+
+    db.session.add(ann)
+    db.session.commit()
+
+    return {"message": "Announcement created"}, 201
