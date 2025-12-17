@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from .models import Visit, Flat
+from .models import Visit, Flat, GateStatus
 from .extensions import db
 from datetime import datetime
 
@@ -62,3 +62,34 @@ def guard_visits():
             "created_at": v.in_time.isoformat(),
         }
         for v, f in visits])
+
+
+@bp.route("/gate/toggle", methods=["POST"])
+@jwt_required()
+def toggle_gate():
+    claims = get_jwt()
+    if claims.get("role") != "guard":
+        return {"error": "forbidden"}, 403
+
+    gate = GateStatus.query.filter_by(gate_name="BACK_GATE").first()
+
+    if not gate:
+        gate = GateStatus(
+            gate_name="BACK_GATE",
+            status="CLOSED"
+        )
+
+    # 🔁 TOGGLE
+    gate.status = "OPEN" if gate.status == "CLOSED" else "CLOSED"
+    gate.updated_at = datetime.utcnow()
+    gate.updated_by = str(get_jwt_identity())
+
+    db.session.add(gate)
+    db.session.commit()
+
+    return {
+        "gate": gate.gate_name,
+        "status": gate.status
+    }
+
+

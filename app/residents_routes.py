@@ -13,7 +13,7 @@ def me_pending():
     role = claims.get("role")
 
     if role != "resident":
-        return jsonify({"error": "forbidden"}), 403
+        return jsonify([{"error": "forbidden"}]), 403
     resident = Resident.query.get(resident_id)
     visits = Visit.query.filter_by(flat_id=resident.flat_id, status="PENDING").all()
     out = [{

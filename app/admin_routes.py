@@ -132,7 +132,7 @@ def approve_resident(id):
     return {"message": "Resident approved"}
 
 
-@bp.route("/announcements", methods=["POST"])
+@bp.route("/admin/announcements", methods=["POST"])
 @jwt_required()
 def create_announcement():
     claims = get_jwt()
@@ -153,3 +153,4 @@ def create_announcement():
     db.session.commit()
 
     return {"message": "Announcement created"}, 201
+

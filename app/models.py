@@ -96,3 +96,15 @@ class Announcement(db.Model):
     end_time = db.Column(db.DateTime, nullable=False)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class GateStatus(db.Model):
+    __tablename__ = "gate_status"
+
+    id = db.Column(db.Integer, primary_key=True)
+    gate_name = db.Column(db.String(50), default="BACK_GATE", unique=True)
+    status = db.Column(db.String(20), nullable=False)
+    # OPEN / CLOSED
+
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_by = db.Column(db.String(20))
+    # guard name or id

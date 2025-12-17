@@ -17,8 +17,9 @@ def visitor_entry():
     visitor.name = data.get("name") or visitor.name
     visitor.company = data.get("company") or visitor.company
     visitor.last_visited = datetime.utcnow()
+    flat_num = Flat.query.filter_by(number=data["flat_id"]).first()
 
-    visit = Visit(visitor=visitor, flat_id=data["flat_id"], purpose=data["purpose"], status="PENDING")
+    visit = Visit(visitor=visitor, flat_id=flat_num.id, purpose=data["purpose"], status="PENDING")
     db.session.add(visit)
     db.session.commit()
     return jsonify({"visit_id": visit.id}), 201
