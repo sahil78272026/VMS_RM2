@@ -6,6 +6,12 @@ from flask_jwt_extended import create_access_token
 
 bp = Blueprint("auth", __name__)
 
+
+@bp.route("/ping")
+def ping():
+    print("pong")
+    return "pong"
+
 @bp.route("/resident/register", methods=["POST"])
 def resident_register():
     data = request.json
