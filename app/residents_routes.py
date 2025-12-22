@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from .models import Resident, Visit, Announcement
+from .models import Resident, Visit, Announcement, Visitor
 from .extensions import db
 
 bp = Blueprint("residents", __name__)
@@ -78,3 +78,50 @@ def get_announcements():
         }
         for a in anns
     ]
+
+
+@bp.route("/visits/expected", methods=["POST"])
+@jwt_required()
+def create_expected_visit():
+    claims = get_jwt()
+    if claims.get("role") != "resident":
+        return {"error": "Forbidden"}, 403
+
+    data = request.json or {}
+
+    visitor_name = data.get("name")
+    mobile = data.get("mobile")
+    purpose = data.get("purpose")
+
+    if not all([visitor_name, mobile, purpose]):
+        return {"error": "Missing required fields"}, 400
+
+    resident_id = int(get_jwt_identity())
+
+    # 🔐 Get resident & flat from DB
+    resident = Resident.query.get_or_404(resident_id)
+    flat_id = resident.flat_id
+
+    # 🔍 Find or create visitor
+    visitor = Visitor.query.filter_by(mobile=mobile).first()
+    if not visitor:
+        visitor = Visitor(name=visitor_name, mobile=mobile)
+        db.session.add(visitor)
+        db.session.flush()
+
+    # ✅ Create APPROVED visit
+    visit = Visit(
+        visitor_id=visitor.id,
+        flat_id=flat_id,
+        purpose=purpose,
+        status="APPROVED",
+        in_time=datetime.utcnow()
+    )
+
+    db.session.add(visit)
+    db.session.commit()
+
+    return {
+        "message": "Expected visitor added successfully",
+        "visit_id": visit.id
+    }, 201

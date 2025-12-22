@@ -11,7 +11,7 @@ qr_bp = Blueprint("qr", __name__)
 @qr_bp.route("/gate-qr", methods=["GET"])
 def generate_gate_qr():
     frontend_base = os.getenv("FRONTEND_BASE_URL")
-
+    print(frontend_base)
     if not frontend_base:
         return {"error": "FRONTEND_BASE_URL not set"}, 500
 
