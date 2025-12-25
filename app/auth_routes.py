@@ -50,7 +50,7 @@ def resident_login():
     return jsonify({
         "access_token": access_token,
         "resident": {
-            "id": r.id,
+            "id": r.flat.number,
             "name": r.name
         }
     }), 200
