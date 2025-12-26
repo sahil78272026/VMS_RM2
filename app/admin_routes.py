@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from .models import Visit, Flat, Guard, Resident, Announcement
+from .models import Visit, Flat, Guard, Resident, Announcement, Service
 from .extensions import db
 from datetime import datetime
 
@@ -154,3 +154,38 @@ def create_announcement():
 
     return {"message": "Announcement created"}, 201
 
+
+
+@bp.route("/admin/services", methods=["POST"])
+@jwt_required()
+def add_service():
+    claims = get_jwt()
+    if claims.get("role") != "admin":
+        return {"error": "Forbidden"}, 403
+
+    data = request.json or {}
+
+    service = Service(
+        name=data.get("name"),
+        type=data.get("type"),
+        phone=data.get("phone")
+    )
+
+    db.session.add(service)
+    db.session.commit()
+
+    return {"message": "Service added"}, 201
+
+
+@bp.route("admin/services/<int:service_id>/toggle", methods=["POST"])
+@jwt_required()
+def toggle_service(service_id):
+    claims = get_jwt()
+    if claims.get("role") != "admin":
+        return {"error": "Forbidden"}, 403
+
+    service = Service.query.get_or_404(service_id)
+    service.is_active = not service.is_active
+    db.session.commit()
+
+    return {"message": "Service status updated"}

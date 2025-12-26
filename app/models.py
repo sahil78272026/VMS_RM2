@@ -108,3 +108,13 @@ class GateStatus(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_by = db.Column(db.String(20))
     # guard name or id
+
+
+class Service(db.Model):
+    __tablename__ = "services"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    type = db.Column(db.String(50), nullable=False)
+    phone = db.Column(db.String(15), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
