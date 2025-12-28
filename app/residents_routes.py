@@ -125,3 +125,19 @@ def create_expected_visit():
         "message": "Expected visitor added successfully",
         "visit_id": visit.id
     }, 201
+
+
+@bp.get("/profile")
+@jwt_required()
+def residentProfile():
+    claims = get_jwt()
+    if claims.get("role") != "resident":
+        return {"error": "Forbidden"}, 403
+
+    resident_id = int(get_jwt_identity())
+
+    # 🔐 Get resident & flat from DB
+    resident = Resident.query.get_or_404(resident_id)
+    name = resident.name
+    flat_number = resident.flat.number
+    return jsonify({"name":name, "flat":flat_number})
