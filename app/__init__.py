@@ -1,4 +1,5 @@
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
+import os
 from .extensions import db, migrate, jwt, cors
 from . import models
 from .auth_routes import bp as auth_bp
@@ -11,12 +12,15 @@ from .admin_routes import bp as admin_bp
 from .announcements_routes import bp as announcement_bp
 from .gate_routes import bp as gate_bp
 from .service_routes import bp as service_bp
+from .uploads_routes import bp as uploads_routes
 from config import Config
 
 
 def create_app():
     app = Flask(__name__, static_folder=None)
     app.config.from_object(Config)
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    print(app.config['UPLOAD_FOLDER'])
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -47,6 +51,7 @@ def create_app():
     app.register_blueprint(announcement_bp, url_prefix="/api")
     app.register_blueprint(gate_bp, url_prefix="/api")
     app.register_blueprint(service_bp, url_prefix="/api")
+    app.register_blueprint(uploads_routes, url_prefix="/api")
 
 
 

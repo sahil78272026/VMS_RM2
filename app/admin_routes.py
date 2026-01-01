@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from .models import Visit, Flat, Guard, Resident, Announcement, Service
+from .models import Visit, Flat, Guard, Resident, Announcement, Service, MaintenancePayment
 from .extensions import db
 from datetime import datetime
 
@@ -189,3 +189,44 @@ def toggle_service(service_id):
     db.session.commit()
 
     return {"message": "Service status updated"}
+
+
+
+@bp.route("/maintenance/pending", methods=["GET"])
+@jwt_required()
+def pending_maintenance():
+    claims = get_jwt()
+    if claims.get("role") != "admin":
+        return {"error": "Forbidden"}, 403
+
+    payments = MaintenancePayment.query.filter_by(
+        status="PENDING"
+    ).order_by(MaintenancePayment.created_at.desc()).all()
+
+    return jsonify([
+        {
+            "id": p.id,
+            "resident": p.resident.name,
+            "flat": p.flat.number,
+            "year": p.year,
+            "amount": float(p.amount),
+            "proof": p.proof_image
+        }
+        for p in payments
+    ])
+
+@bp.route("/maintenance/<int:id>/approve", methods=["POST"])
+@jwt_required()
+def approve_maintenance(id):
+    claims = get_jwt()
+    if claims.get("role") != "admin":
+        return {"error": "Forbidden"}, 403
+
+    payment = MaintenancePayment.query.get_or_404(id)
+    payment.status = "APPROVED"
+    payment.approved_at = datetime.utcnow()
+    payment.approved_by = int(get_jwt_identity())
+
+    db.session.commit()
+
+    return {"message": "Payment approved"}

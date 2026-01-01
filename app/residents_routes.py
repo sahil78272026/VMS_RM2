@@ -1,7 +1,9 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from .models import Resident, Visit, Announcement, Visitor
+from .models import Resident, Visit, Announcement, Visitor, MaintenancePayment
 from .extensions import db
+import os
+from werkzeug.utils import secure_filename
 
 bp = Blueprint("residents", __name__)
 
@@ -141,3 +143,63 @@ def residentProfile():
     name = resident.name
     flat_number = resident.flat.number
     return jsonify({"name":name, "flat":flat_number})
+
+@bp.route("/maintenance", methods=["POST"])
+@jwt_required()
+def submit_maintenance():
+    claims = get_jwt()
+    if claims.get("role") != "resident":
+        return {"error": "Forbidden"}, 403
+
+    resident_id = int(get_jwt_identity())
+    resident = Resident.query.get_or_404(resident_id)
+
+    year = request.form.get("year")
+    amount = request.form.get("amount")
+    image = request.files.get("proof")
+
+    if not year or not amount:
+        return {"error": "Year and amount are required"}, 400
+
+    filename = None
+    if image:
+        filename = secure_filename(image.filename)
+        image.save(os.path.join(current_app.config["UPLOAD_FOLDER"], filename))
+
+    payment = MaintenancePayment(
+        resident_id=resident.id,
+        flat_id=resident.flat_id,
+        year=int(year),
+        amount=amount,
+        proof_image=filename
+    )
+
+    db.session.add(payment)
+    db.session.commit()
+
+    return {"message": "Maintenance submitted for admin approval"}, 201
+
+@bp.route("/maintenance", methods=["GET"])
+@jwt_required()
+def my_maintenance():
+    claims = get_jwt()
+    if claims.get("role") != "resident":
+        return {"error": "Forbidden"}, 403
+
+    resident_id = int(get_jwt_identity())
+
+    payments = MaintenancePayment.query.filter_by(
+        resident_id=resident_id
+    ).order_by(MaintenancePayment.created_at.desc()).all()
+
+    return [
+        {
+            "id": p.id,
+            "year": p.year,
+            "amount": float(p.amount),
+            "status": p.status,
+            "proof": p.proof_image
+        }
+        for p in payments
+    ]
+

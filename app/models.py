@@ -118,3 +118,29 @@ class Service(db.Model):
     type = db.Column(db.String(50), nullable=False)
     phone = db.Column(db.String(15), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
+
+
+class MaintenancePayment(db.Model):
+    __tablename__ = "maintenance_payments"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    resident_id = db.Column(db.Integer, db.ForeignKey("residents.id"), nullable=False)
+    flat_id = db.Column(db.Integer, db.ForeignKey("flats.id"), nullable=False)
+
+    year = db.Column(db.Integer, nullable=False)     # e.g. 2024
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
+
+    proof_image = db.Column(db.String(255))           # stored filename
+
+    status = db.Column(
+        db.String(20),
+        default="PENDING"
+    )  # PENDING / APPROVED / REJECTED
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    approved_at = db.Column(db.DateTime)
+    approved_by = db.Column(db.Integer, db.ForeignKey("admins.id"))
+
+    resident = db.relationship("Resident", backref="maintenance_payments")
+    flat = db.relationship("Flat", backref="maintenance_payments")
