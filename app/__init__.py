@@ -13,6 +13,7 @@ from .gate_routes import bp as gate_bp
 from .service_routes import bp as service_bp
 from config import Config
 
+SUFFIX = "api"
 
 def create_app():
     app = Flask(__name__, static_folder=None)
@@ -37,16 +38,17 @@ def create_app():
 
 
     # blueprints
-    app.register_blueprint(auth_bp, url_prefix="/api/auth")
-    app.register_blueprint(visitors_bp, url_prefix="/api/visitors")
-    app.register_blueprint(residents_bp, url_prefix="/api/residents")
-    app.register_blueprint(guards_bp, url_prefix="/api/guards")
-    app.register_blueprint(qr_bp, url_prefix="/api/qr")
-    app.register_blueprint(flats_bp, url_prefix="/api")
-    app.register_blueprint(admin_bp, url_prefix="/api")
-    app.register_blueprint(announcement_bp, url_prefix="/api")
-    app.register_blueprint(gate_bp, url_prefix="/api")
-    app.register_blueprint(service_bp, url_prefix="/api")
+    app.register_blueprint(auth_bp, url_prefix=f"/{SUFFIX}/auth")
+    app.register_blueprint(visitors_bp, url_prefix="/{SUFFIX}/visitors")
+    app.register_blueprint(residents_bp, url_prefix="/{SUFFIX}/residents")
+    app.register_blueprint(guards_bp, url_prefix="/{SUFFIX}/guards")
+    app.register_blueprint(qr_bp, url_prefix="/{SUFFIX}/qr")
+    app.register_blueprint(flats_bp, url_prefix="/{SUFFIX}")
+    app.register_blueprint(admin_bp, url_prefix="/{SUFFIX}")
+    app.register_blueprint(announcement_bp, url_prefix="/{SUFFIX}")
+    app.register_blueprint(gate_bp, url_prefix="/{SUFFIX}")
+    app.register_blueprint(service_bp, url_prefix="/{SUFFIX}")
+    # app.register_blueprint(uploads_routes, url_prefix="/{SUFFIX}")
 
 
 
