@@ -144,3 +144,5 @@ class MaintenancePayment(db.Model):
 
     resident = db.relationship("Resident", backref="maintenance_payments")
     flat = db.relationship("Flat", backref="maintenance_payments")
+    pass
+    pass
