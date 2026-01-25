@@ -11,6 +11,7 @@ from .admin_routes import bp as admin_bp
 from .announcements_routes import bp as announcement_bp
 from .gate_routes import bp as gate_bp
 from .service_routes import bp as service_bp
+from .notifications_routes import bp as noti_bp
 from config import Config
 
 SUFFIX = "api"
@@ -48,6 +49,7 @@ def create_app():
     app.register_blueprint(announcement_bp, url_prefix="/api")
     app.register_blueprint(gate_bp, url_prefix="/api")
     app.register_blueprint(service_bp, url_prefix="/api")
+    app.register_blueprint(noti_bp, url_prefix="/api")
     # app.register_blueprint(uploads_routes, url_prefix="/{SUFFIX}")
 
 

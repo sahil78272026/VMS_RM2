@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from .models import Visitor, Visit, Flat
 from .extensions import db
+from .notifications_routes import notify_resident
 from datetime import datetime
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 
@@ -22,6 +23,8 @@ def visitor_entry():
     visit = Visit(visitor=visitor, flat_id=flat_num.id, purpose=data["purpose"], status="PENDING")
     db.session.add(visit)
     db.session.commit()
+    resident_id = Resident.query.filter_by(flat_id=flat_num).first()
+    notify_resident(resident_id)
     return jsonify({"visit_id": visit.id}), 201
 
 @bp.route("/lookup", methods=["GET"])

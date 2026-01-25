@@ -118,3 +118,11 @@ class Service(db.Model):
     type = db.Column(db.String(50), nullable=False)
     phone = db.Column(db.String(15), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
+
+class PushSubscription(db.Model):
+    id= db.Column(db.Integer, primary_key=True)
+    resident_id = db.Column(db.Integer, db.ForeignKey("residents.id"), nullable=False)
+    endpoint = db.Column(db.String(255), nullable=False)
+    p256dh = db.Column(db.String(255), nullable=False)
+    auth = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
