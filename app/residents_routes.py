@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from .models import Resident, Visit, Announcement, Visitor
+from .models.models import Resident, Visit, Announcement, Visitor
 from .extensions import db
 
 bp = Blueprint("residents", __name__)

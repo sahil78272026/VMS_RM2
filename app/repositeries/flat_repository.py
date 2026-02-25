@@ -1,4 +1,4 @@
-from app.models import Flat
+from app.models.models import Flat
 
 class FlatRepository:
     def get_by_number(self, number):

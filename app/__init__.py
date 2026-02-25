@@ -1,9 +1,8 @@
 from flask import Flask, request
 from .extensions import db, migrate, jwt, cors
-from . import models
+from .models import models
 from .auth_routes import bp as auth_bp
-# from .visitor_routes import bp as visitors_bp
-from .residents_routes import bp as residents_bp
+# from .residents_routes import bp as residents_bp
 from .guard_routes import bp as guards_bp
 from .qr_routes import qr_bp
 from .flat_routes import bp as flats_bp
@@ -18,7 +17,9 @@ from app.repositeries.visit_repository import VisitRepository
 from app.repositeries.residents_repository import ResidentRepository
 from app.services.notification_service import NotificationService
 from app.services.visitor_service import VisitorService
+from app.services.residents_service import ResidentService
 from app.routes.visitor_routes import create_visitor_routes
+from app.routes.resident_routes import create_resident_routes
 
 SUFFIX = "api"
 
@@ -46,7 +47,10 @@ def create_app():
     resident_repo = ResidentRepository()
     notification_service = NotificationService()
     visitor_service = VisitorService(visitor_repo, flat_repo, visit_repo, resident_repo, notification_service)
+    resident_service = ResidentService(resident_repo)
     visitors_bp = create_visitor_routes(visitor_service)
+    residents_bp = create_resident_routes(resident_service)
+    
     @app.before_request
     def handle_preflight():
         if request.method == "OPTIONS":

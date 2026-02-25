@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from .models import Resident, Guard, Visitor, Admin
+from .models.models import Resident, Guard, Visitor, Admin
 from .extensions import db
 from flask_jwt_extended import create_access_token
 

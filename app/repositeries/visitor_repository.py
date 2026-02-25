@@ -1,4 +1,4 @@
-from app.models import Visitor
+from app.models.models import Visitor
 from app.extensions import db
 from datetime import datetime
 
@@ -10,6 +10,7 @@ class VisitorRepository:
     def create(self, name, mobile, company):
         visitor = Visitor(name=name, mobile=mobile, company=company)
         db.session.add(visitor)
+        pass
         return visitor
     
     def update(self, visitor: Visitor, name, company):

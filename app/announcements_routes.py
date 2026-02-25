@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from .models import Announcement
+from .models.models import Announcement
 from datetime import datetime
 
 

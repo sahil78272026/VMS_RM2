@@ -21,3 +21,18 @@ class VisitorService:
         if resident:
             self.notification_service.notify_resident(resident.id)
         return visit
+
+    def lookup(self, dto):
+        visitor = self.visitor_repo.get_by_mobile(dto.mobile)
+        if not visitor:
+            return {"Found":False}
+        return {
+        "found": True,
+        "name": visitor.name,
+        "company": visitor.company,
+        "last_visited": visitor.last_visited.isoformat() if visitor.last_visited else None
+    }
+
+    def get_my_visits(self, visitor_id):
+        visits = self.visit_repo.get_by_visitors(visitor_id)
+        return visits

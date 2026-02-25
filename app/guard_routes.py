@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from .models import Visit, Flat, GateStatus
+from .models.models import Visit, Flat, GateStatus
 from .extensions import db
 from datetime import datetime
 

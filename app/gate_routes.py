@@ -1,4 +1,4 @@
-from .models import GateStatus
+from .models.models import GateStatus
 from  flask import Blueprint, jsonify
 
 

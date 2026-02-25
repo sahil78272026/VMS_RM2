@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from .models import Service
+from .models.models import Service
 
 
 bp = Blueprint("services", __name__)
