@@ -5,7 +5,7 @@ import Constants from 'expo-constants';
 
 const debuggerHost = Constants.expoConfig?.hostUri;
 const localhost = debuggerHost?.split(':')[0] || '10.0.2.2';
-export const BASE_URL = `http://${localhost}:5000/api/v1`;
+export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || `http://${localhost}:5000/api/v1`;
 
 const api = axios.create({
   baseURL: BASE_URL,

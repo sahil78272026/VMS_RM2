@@ -33,25 +33,14 @@ class BaseConfig:
     JWT_HEADER_NAME                 = "Authorization"
     JWT_HEADER_TYPE                 = "Bearer"
 
-    # ── Cloudinary ─────────────────────────────────────────────────────────
-    CLOUDINARY_CLOUD_NAME           = os.getenv("CLOUDINARY_CLOUD_NAME")
-    CLOUDINARY_API_KEY              = os.getenv("CLOUDINARY_API_KEY")
-    CLOUDINARY_API_SECRET           = os.getenv("CLOUDINARY_API_SECRET")
 
     # ── Twilio ─────────────────────────────────────────────────────────────
     TWILIO_ACCOUNT_SID              = os.getenv("TWILIO_ACCOUNT_SID")
     TWILIO_AUTH_TOKEN               = os.getenv("TWILIO_AUTH_TOKEN")
     TWILIO_PHONE_NUMBER             = os.getenv("TWILIO_PHONE_NUMBER")
 
-    # ── Firebase ───────────────────────────────────────────────────────────
-    FIREBASE_CREDENTIALS_PATH       = os.getenv("FIREBASE_CREDENTIALS_PATH")
-
-    # ── Redis ──────────────────────────────────────────────────────────────
-    REDIS_URL                       = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-
     # ── Rate Limiting ──────────────────────────────────────────────────────
     RATELIMIT_DEFAULT               = os.getenv("RATELIMIT_DEFAULT", "200 per day;50 per hour")
-    RATELIMIT_STORAGE_URL           = os.getenv("REDIS_URL", "memory://")
 
     # ── Pagination ─────────────────────────────────────────────────────────
     DEFAULT_PAGE_SIZE               = 20

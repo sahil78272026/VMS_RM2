@@ -158,15 +158,28 @@ SOCIETY_CITY=Bangalore
 
 ---
 
-## Production
+## Production Deployment
 
+### 1. Backend (Render)
+Deploy the `backend` folder to Render (Web Service):
+- **Root Directory:** `backend`
+- **Environment:** `Python 3.12.3` (Set `PYTHON_VERSION=3.12.3` in Render environment variables)
+- **Build Command:** `pip install -r requirements.txt`
+- **Start Command:** `alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- **Environment Variables:** Must include `DATABASE_URL` (PostgreSQL), `APP_ENV=PROD`, `SECRET_KEY`, `JWT_SECRET_KEY`, and `SUPABASE_S3_*` credentials.
+
+### 2. Web Kiosk / Landing Page (Vercel / Netlify)
+Deploy the `landing-page` folder to Vercel or Netlify:
+- **Root Directory:** `landing-page`
+- **Build Command:** `npm run build`
+- **Output Directory:** `dist`
+- **Environment Variables:** Set `VITE_API_URL` to your live Render backend URL (e.g., `https://vms-backend-xyz.onrender.com/api/v1`)
+
+### 3. Mobile App (Expo EAS)
+Build the Android APK or iOS app using Expo Application Services (EAS):
+1. Navigate to the `mobile/` directory.
+2. Open `mobile/.env` and uncomment/set `EXPO_PUBLIC_API_URL=https://vms-backend-xyz.onrender.com/api/v1`.
+3. Run the EAS build command:
 ```bash
-# Backend
-gunicorn "run:app" --workers 4 --bind 0.0.0.0:5000
-
-# Frontend
-npm run build
-# Serve build/ via nginx or any static host
+eas build -p android --profile preview
 ```
-
-Switch `DATABASE_URL` to PostgreSQL for production.
