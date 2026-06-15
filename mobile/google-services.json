@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "406916206590",
+    "project_id": "rm2-push",
+    "storage_bucket": "rm2-push.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:406916206590:android:c2cf47fc49f5569d713aaf",
+        "android_client_info": {
+          "package_name": "com.anonymous.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyANlffgOFKRmwxI94KLLyG6K7qDvw9K6ro"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
