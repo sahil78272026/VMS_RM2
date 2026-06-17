@@ -117,7 +117,7 @@ def create_app() -> FastAPI:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-    @app.get("/health")
+    @app.api_route("/health", methods=["GET", "HEAD"])
     def health():
         from app.database import SessionLocal
         from sqlalchemy import text
