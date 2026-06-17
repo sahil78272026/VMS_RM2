@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, Alert, ScrollView } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { VisitorLogService, GateSessionService, GateService, FlatService } from '../../services';
 import { T, Card, Badge, Avatar, Btn, Input, Select, PageLayout, StatCard, EmptyState, LoadingScreen, Tabs } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
@@ -164,6 +165,31 @@ export function GuardDashboard({ navigation }: any) {
         ))}
       </View>
     );
+    if (currentTab === 'qr') {
+      const qrUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://vmsrm2.netlify.app';
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <Text style={{ fontSize: 20, fontWeight: 'bold', color: T.text, marginBottom: 10, textAlign: 'center' }}>
+            Self Check-In QR Code
+          </Text>
+          <Text style={{ color: T.muted, marginBottom: 30, textAlign: 'center' }}>
+            Visitors can scan this code to open the check-in form on their phone.
+          </Text>
+          <View style={{ padding: 20, backgroundColor: 'white', borderRadius: 16 }}>
+            <QRCode
+              value={qrUrl}
+              size={250}
+              color="black"
+              backgroundColor="white"
+            />
+          </View>
+          <Text style={{ color: T.muted, marginTop: 20, textAlign: 'center' }}>
+            Points to: {qrUrl}
+          </Text>
+        </View>
+      );
+    }
+
   };
 
   return (
@@ -173,6 +199,7 @@ export function GuardDashboard({ navigation }: any) {
           { id: 'dashboard', label: 'Dashboard' },
           { id: 'register', label: 'Register Visitor' },
           { id: 'inside', label: 'Inside Now' },
+          { id: 'qr', label: 'Check-In QR' },
         ]} active={currentTab} onChange={setCurrentTab} />
       </ScrollView>
 

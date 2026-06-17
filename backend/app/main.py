@@ -119,12 +119,23 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     def health():
+        from app.database import SessionLocal
+        from sqlalchemy import text
+        db_status = "ok"
+        try:
+            db = SessionLocal()
+            db.execute(text("SELECT 1"))
+            db.close()
+        except Exception as e:
+            db_status = f"error: {str(e)}"
+            
         return {
-            "success": True,
+            "success": db_status == "ok",
             "message": "RM2 VMS is running",
             "data": {
                 "version": "1.0.0",
-                "env": "development"
+                "env": os.getenv("APP_ENV", "development"),
+                "database": db_status
             },
             "error": None
         }
