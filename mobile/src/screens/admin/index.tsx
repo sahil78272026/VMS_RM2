@@ -1,12 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Alert, ScrollView } from 'react-native';
+import { View, Text, Alert, ScrollView, BackHandler } from 'react-native';
 import { T, Card, Btn, PageLayout, StatCard, EmptyState, LoadingScreen, Tabs, Avatar, Badge, Input, Select, Modal } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
 import { UserService, FlatUserService, GuardService, FlatService } from '../../services';
 
 export function AdminDashboard({ navigation }: any) {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const [currentTab, setCurrentTab] = useState('dashboard');
+
+  useEffect(() => {
+    const backAction = () => {
+      if (currentTab !== 'dashboard') {
+        setCurrentTab('dashboard');
+        return true;
+      }
+      return false;
+    };
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [currentTab]);
+
   const [loading, setLoading] = useState(true);
 
   const [flats, setFlats] = useState<any[]>([]);
@@ -142,15 +155,28 @@ export function AdminDashboard({ navigation }: any) {
         ))}
       </View>
     );
+
+    if (currentTab === 'profile') return (
+      <View>
+        <Card style={{ alignItems: 'center', padding: 30 }}>
+          <Avatar name={user?.name || '?'} size={80} />
+          <Text style={{ color: T.text, fontSize: 24, fontWeight: '800', marginTop: 16 }}>{user?.name}</Text>
+          <Text style={{ color: T.muted, fontSize: 16, marginTop: 4 }}>{user?.phone}</Text>
+          {user?.role && <Badge color="blue" style={{ marginTop: 12 }}>{user?.role}</Badge>}
+        </Card>
+        <Btn variant="red" full onClick={logout} style={{ marginTop: 24 }}>Log Out</Btn>
+      </View>
+    );
   };
 
   return (
-    <PageLayout title="Admin" subtitle="Society Management" action={<Btn variant="ghost" sm onClick={logout}>Logout</Btn>}>
+    <PageLayout title="Admin" subtitle="Society Management">
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20, marginHorizontal: -24, paddingHorizontal: 24 }}>
         <Tabs tabs={[
           { id: 'dashboard', label: 'Overview' },
           { id: 'residents', label: 'Residents' },
           { id: 'guards', label: 'Guards' },
+          { id: 'profile', label: 'Profile' },
         ]} active={currentTab} onChange={setCurrentTab} />
       </ScrollView>
 

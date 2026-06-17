@@ -56,10 +56,17 @@ A lightweight, mobile-responsive web app designed specifically for visitor self-
 *   **S3 Object Storage:** Hosts visitor selfies.
     *   *Workflow:* Web Kiosk captures a Base64 selfie → Sends to Backend → Backend uses `boto3` to convert to binary and stream to the Supabase `rm2-bucket` → Saves the public URL in the database.
 
-### 2. Expo Cloud (EAS & Push Notifications)
-*   **EAS Build:** Compiles the React Native JavaScript code into native `.apk` (Android) and `.ipa` (iOS) binaries in the cloud.
-*   **Expo Push API:** Delivers notifications to resident phones.
-    *   *Workflow:* Backend hits `https://exp.host/--/api/v2/push/send` with the resident's Expo Push Token. Expo handles waking up the phone and displaying the system alert.
+### 2. Push Notifications Pipeline (Expo & Firebase)
+We utilize a managed proxy architecture for Push Notifications. Rather than configuring raw Firebase credentials in the backend, the backend communicates entirely with Expo, which manages the underlying native delivery systems.
+
+*   **Firebase Cloud Messaging (FCM):** Under the hood, Android devices require Firebase to wake up the phone and display a notification. When the `.apk` is built via EAS, Expo automatically bundles the necessary FCM native code into the Android app.
+*   **Apple Push Notification Service (APNs):** For iOS devices, Expo automatically interfaces with APNs.
+*   **The Workflow:**
+    1.  **App Load:** When a resident opens the mobile app, the `expo-notifications` library generates a unique `Expo Push Token` and saves it to the Backend database.
+    2.  **Event Trigger:** A visitor checks in at the Web Kiosk.
+    3.  **Backend Dispatch:** The FastAPI Backend sends a simple JSON payload containing the Resident's `Expo Push Token` to the **Expo Push API** (`https://exp.host/--/api/v2/push/send`).
+    4.  **Expo Routing:** Expo's cloud servers identify the device type from the token. If it's an Android device, Expo securely forwards the payload to **Firebase (FCM)**.
+    5.  **Final Delivery:** Firebase wakes up the resident's phone and displays the system alert.
 
 ### 3. Render (Backend Hosting)
 *   Hosts the FastAPI application.

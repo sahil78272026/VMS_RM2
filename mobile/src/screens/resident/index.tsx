@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Alert, TouchableOpacity, ScrollView, Image } from 'react-native';
+import { View, Text, Alert, TouchableOpacity, ScrollView, Image, BackHandler } from 'react-native';
 import { VisitorLogService, PreApprovalService, FrequentPassService, MaintenanceService, AnnouncementService, FlatUserService } from '../../services';
 import { T, Card, Badge, Avatar, Btn, Input, Select, PageLayout, StatCard, EmptyState, LoadingScreen, Modal, Tabs } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
@@ -9,6 +9,17 @@ export function ResidentDashboard({ route }: any) {
   const { logout } = useAuth();
   const [currentTab, setCurrentTab] = useState(route?.params?.tab || 'dashboard');
 
+  useEffect(() => {
+    const backAction = () => {
+      if (currentTab !== 'dashboard') {
+        setCurrentTab('dashboard');
+        return true;
+      }
+      return false;
+    };
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [currentTab]);
   const [pending, setPending] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [bills, setBills] = useState<any[]>([]);
@@ -186,10 +197,22 @@ export function ResidentDashboard({ route }: any) {
         ))}
       </View>
     );
+
+    if (currentTab === 'profile') return (
+      <View>
+        <Card style={{ alignItems: 'center', padding: 30 }}>
+          <Avatar name={user?.name || '?'} size={80} />
+          <Text style={{ color: T.text, fontSize: 24, fontWeight: '800', marginTop: 16 }}>{user?.name}</Text>
+          <Text style={{ color: T.muted, fontSize: 16, marginTop: 4 }}>{user?.phone}</Text>
+          {user?.role && <Badge color="blue" style={{ marginTop: 12 }}>{user?.role}</Badge>}
+        </Card>
+        <Btn variant="red" full onClick={logout} style={{ marginTop: 24 }}>Log Out</Btn>
+      </View>
+    );
   };
 
   return (
-    <PageLayout title="Resident" subtitle="RM2 Residency" action={<Btn variant="ghost" sm onClick={logout}>Logout</Btn>}>
+    <PageLayout title="Resident" subtitle="RM2 Residency">
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20, marginHorizontal: -24, paddingHorizontal: 24 }}>
         <Tabs tabs={[
           { id: 'dashboard', label: 'Dashboard' },
@@ -197,6 +220,7 @@ export function ResidentDashboard({ route }: any) {
           { id: 'history', label: 'History' },
           { id: 'bills', label: 'Bills' },
           { id: 'notices', label: 'Notices' },
+          { id: 'profile', label: 'Profile' },
         ]} active={currentTab} onChange={setCurrentTab} />
       </ScrollView>
 
