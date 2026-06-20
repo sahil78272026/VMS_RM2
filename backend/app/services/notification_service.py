@@ -196,23 +196,33 @@ class NotificationService:
 
         logger.critical(f"[PANIC] Alert triggered — notified {len(admins)} admin(s)")
 
-    def notify_bill_due(self, bill):
-        """Remind resident their maintenance bill is due."""
+    def notify_maintenance_approved(self, payment):
         from app.repositories import FlatUserRepository
-        flat_user = FlatUserRepository(db).get_primary_by_flat(bill.flat_id)
-        if flat_user:
-            user    = self.user_repo.get_by_id(flat_user.user_id)
-            message = (
-                f"Your maintenance bill of ₹{bill.amount} for {bill.bill_period} "
-                f"is due on {bill.due_date}. Please pay to avoid late charges."
-            )
-            self._create_notification(
-                user_id    = user.id,
-                notif_type = "bill_due",
-                message    = message,
-                channel    = "push",
-            )
-            self._send_push(user.id, "Bill Due 💰", message)
+        approvers = self.flat_user_repo.get_approvers_by_flat(payment.flat_id)
+        for flat_user in approvers:
+            user = self.user_repo.get_by_id(flat_user.user_id)
+            if not user: continue
+            msg = f"Your maintenance payment of ₹{payment.amount} has been approved! Flat {payment.flat.flat_number} is now active."
+            self._create_notification(user.id, "bill_due", msg, "push")
+            self._send_push(user.id, "Maintenance Approved ✅", msg)
+
+    def notify_maintenance_reminder(self, flat, days_left):
+        approvers = self.flat_user_repo.get_approvers_by_flat(flat.id)
+        for flat_user in approvers:
+            user = self.user_repo.get_by_id(flat_user.user_id)
+            if not user: continue
+            msg = f"Reminder: Maintenance for Flat {flat.flat_number} expires in {days_left} days. Please renew soon to avoid interruption."
+            self._create_notification(user.id, "bill_due", msg, "push")
+            self._send_push(user.id, "Maintenance Expiring Soon ⚠️", msg)
+
+    def notify_maintenance_overdue(self, flat):
+        approvers = self.flat_user_repo.get_approvers_by_flat(flat.id)
+        for flat_user in approvers:
+            user = self.user_repo.get_by_id(flat_user.user_id)
+            if not user: continue
+            msg = f"Alert: Maintenance for Flat {flat.flat_number} is currently overdue. Please pay immediately."
+            self._create_notification(user.id, "bill_due", msg, "push")
+            self._send_push(user.id, "Maintenance Overdue ❌", msg)
 
     def notify_announcement(self, announcement):
         """Notify all residents of a new announcement."""

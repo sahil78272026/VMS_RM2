@@ -1,13 +1,61 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Alert, TouchableOpacity, ScrollView, Image, BackHandler } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { View, Text, Alert, TouchableOpacity, ScrollView, Image, BackHandler, Linking, PanResponder, Dimensions, Animated } from 'react-native';
 import { VisitorLogService, PreApprovalService, FrequentPassService, MaintenanceService, AnnouncementService, FlatUserService } from '../../services';
-import { T, Card, Badge, Avatar, Btn, Input, Select, PageLayout, StatCard, EmptyState, LoadingScreen, Modal, Tabs } from '../../components/UI';
+import { T, Card, Badge, Avatar, Btn, Input, Select, PageLayout, StatCard, EmptyState, LoadingScreen, Modal, Tabs, Calendar } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
 import { BASE_URL } from '../../services/api';
 
 export function ResidentDashboard({ route }: any) {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const [currentTab, setCurrentTab] = useState(route?.params?.tab || 'dashboard');
+
+  const tabOrder = ['dashboard', 'history', 'bills', 'passes', 'profile'];
+  const currentTabRef = useRef(currentTab);
+  currentTabRef.current = currentTab;
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > Math.abs(gs.dy) && Math.abs(gs.dx) > 15,
+    onPanResponderRelease: (_, gs) => {
+      if (Math.abs(gs.dx) > 30 && Math.abs(gs.vx) > 0.15) {
+        const idx = tabOrder.indexOf(currentTabRef.current);
+        if (gs.dx < 0 && idx < tabOrder.length - 1) setCurrentTab(tabOrder[idx + 1]);
+        if (gs.dx > 0 && idx > 0) setCurrentTab(tabOrder[idx - 1]);
+      }
+    },
+  }), []);
+
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const prevTabRef = useRef(currentTab);
+  const tabScrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const prevIdx = tabOrder.indexOf(prevTabRef.current);
+    const newIdx = tabOrder.indexOf(currentTab);
+    if (prevIdx !== newIdx) {
+      const screenWidth = Dimensions.get('window').width;
+      const startVal = newIdx > prevIdx ? screenWidth * 0.25 : -screenWidth * 0.25;
+      slideAnim.setValue(startVal);
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 60,
+        friction: 10,
+        useNativeDriver: true,
+      }).start();
+    }
+    prevTabRef.current = currentTab;
+
+    // Scroll tab bar to active tab position
+    const tabOffsets: any = {
+      dashboard: 0,
+      history: 30,
+      bills: 130,
+      passes: 200,
+      profile: 300,
+    };
+    const offset = tabOffsets[currentTab] || 0;
+    tabScrollRef.current?.scrollTo({ x: offset, animated: true });
+  }, [currentTab]);
 
   useEffect(() => {
     const backAction = () => {
@@ -22,7 +70,8 @@ export function ResidentDashboard({ route }: any) {
   }, [currentTab]);
   const [pending, setPending] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
-  const [bills, setBills] = useState<any[]>([]);
+  const [flatStatus, setFlatStatus] = useState<any>(null);
+  const [payments, setPayments] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [passes, setPasses] = useState<any[]>([]);
@@ -31,13 +80,14 @@ export function ResidentDashboard({ route }: any) {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<any>(null);
   const [form, setForm] = useState<any>({});
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const [pr, lr, br, mr, ar, par, fpr] = await Promise.all([
         VisitorLogService.getMyPending().catch(() => ({data:{data:[]}})),
         VisitorLogService.getMyLogs({per_page:20}).catch(() => ({data:{data:[]}})),
-        MaintenanceService.getMy().catch(() => ({data:{data:[]}})),
+        MaintenanceService.getMy().catch(() => ({data:{data:{payments:[]}}})),
         FlatUserService.getMyFlat().catch(() => ({data:{data:[]}})),
         AnnouncementService.getAll().catch(() => ({data:{data:[]}})),
         PreApprovalService.getMy().catch(() => ({data:{data:[]}})),
@@ -45,7 +95,8 @@ export function ResidentDashboard({ route }: any) {
       ]);
       setPending(pr.data?.data || []);
       setLogs(lr.data?.data?.items || lr.data?.data || []);
-      setBills(br.data?.data || []);
+      setFlatStatus(br.data?.data?.flat || null);
+      setPayments(br.data?.data?.payments || []);
       setMembers(mr.data?.data || []);
       setAnnouncements(ar.data?.data?.items || ar.data?.data || []);
       setPreApprovals(par.data?.data || []);
@@ -56,11 +107,54 @@ export function ResidentDashboard({ route }: any) {
 
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [load]);
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
+
   const approve = async (id: string) => { try { await VisitorLogService.approve(id); load(); } catch (err: any) { Alert.alert('Error', err.response?.data?.message||'Failed'); } };
   const deny = async (id: string) => { try { await VisitorLogService.deny(id); load(); } catch (err: any) { Alert.alert('Error', err.response?.data?.message||'Failed'); } };
   const confirmDepart = async (id: string) => { try { await VisitorLogService.confirmDeparture(id); load(); } catch (err: any) { Alert.alert('Error', err.response?.data?.message||'Failed'); } };
-  const payBill = async () => { try { await MaintenanceService.pay(modal.id, { payment_mode: form.payment_mode || 'upi', amount_paid: modal.amount }); setModal(null); load(); Alert.alert('Success', 'Payment recorded'); } catch (err: any) { Alert.alert('Error', 'Failed to pay'); } };
-  const createPre = async () => { try { await PreApprovalService.create(form); setModal(null); load(); } catch (err: any) { Alert.alert('Error', 'Failed'); } };
+  const submitRenewal = async () => {
+    if (!form.utr_number || form.utr_number.length < 5) return Alert.alert('Error', 'Please enter a valid UTR number');
+    try { 
+      await MaintenanceService.submitPayment({ amount: modal.amount, months_added: modal.months_added, utr_number: form.utr_number }); 
+      setModal(null); 
+      load(); 
+      Alert.alert('Success', 'Payment submitted for approval!'); 
+    } catch (err: any) { Alert.alert('Error', err.response?.data?.message||'Failed'); } 
+  };
+  const openUPI = (amount: number) => {
+    const upiId = process.env.EXPO_PUBLIC_UPI_ID || 'test@ybl';
+    Linking.openURL(`upi://pay?pa=${upiId}&pn=RM2%20Residency&am=${amount}&cu=INR`).catch(() => Alert.alert('Error', 'No UPI app found. Please pay manually.'));
+  };
+  const createPre = async () => {
+    if (!form.visitor_name?.trim()) return Alert.alert('Error', 'Guest Name is required');
+    if (!form.visitor_phone?.trim()) return Alert.alert('Error', 'Guest Phone is required');
+    if (!form.valid_until) return Alert.alert('Error', 'Please select an expiry date');
+
+    try {
+      const today = new Date();
+      // Format valid_from to start of today (ISO Format)
+      const validFromStr = today.toISOString().split('T')[0] + 'T00:00:00';
+      // Format valid_until to end of selected day (ISO Format)
+      const validUntilStr = form.valid_until + 'T23:59:59';
+
+      await PreApprovalService.create({
+        visitor_name: form.visitor_name.trim(),
+        visitor_phone: form.visitor_phone.trim(),
+        purpose: form.purpose?.trim() || 'Guest',
+        valid_from: validFromStr,
+        valid_until: validUntilStr,
+      });
+      setModal(null);
+      load();
+      Alert.alert('Success', 'Guest pre-approved successfully!');
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.message || 'Failed to create pre-approval');
+    }
+  };
   const cancelPre = async (id: string) => { try { await PreApprovalService.cancel(id); load(); } catch (err: any) { Alert.alert('Error', 'Failed'); } };
 
   if (loading) return <LoadingScreen message="Loading dashboard..." />;
@@ -70,7 +164,7 @@ export function ResidentDashboard({ route }: any) {
       <View>
         <View style={{ flexDirection: 'row', marginBottom: 24 }}>
           <StatCard label="Pending" value={pending.length} color={pending.length>0?T.amber:T.green} />
-          <StatCard label="Unpaid" value={bills.filter(b=>b.status!=='paid').length} color={T.red} />
+          <StatCard label="Flat Status" value={flatStatus?.maintenance_valid_until && new Date(flatStatus.maintenance_valid_until) >= new Date() ? 'Active' : 'Expired'} color={flatStatus?.maintenance_valid_until && new Date(flatStatus.maintenance_valid_until) >= new Date() ? T.green : T.red} />
         </View>
 
         {pending.length > 0 && (
@@ -160,25 +254,55 @@ export function ResidentDashboard({ route }: any) {
       </View>
     );
 
-    if (currentTab === 'bills') return (
-      <View>
-        {bills.length === 0 && <EmptyState icon="💰" message="No bills" />}
-        {bills.map((b: any) => (
-          <Card key={b.id} style={{ borderColor: b.status==='overdue'?T.red+'44':T.border }}>
+    if (currentTab === 'bills') {
+      const validUntil = flatStatus?.maintenance_valid_until ? new Date(flatStatus.maintenance_valid_until) : null;
+      const isExpired = !validUntil || validUntil < new Date();
+      const expiringSoon = validUntil && !isExpired && (validUntil.getTime() - new Date().getTime()) / (1000 * 3600 * 24) <= 15;
+      
+      return (
+        <View>
+          <Card style={{ marginBottom: 24, borderColor: isExpired ? T.red+'88' : expiringSoon ? T.amber+'88' : T.green+'88', borderWidth: 2 }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: T.muted, marginBottom: 8 }}>MAINTENANCE STATUS</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: '700', color: T.text, fontSize: 16 }}>{b.bill_period}</Text>
-                <Text style={{ color: T.muted, fontSize: 13, marginTop: 2 }}>Due: {new Date(b.due_date).toLocaleDateString()} · ₹{b.amount}</Text>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: isExpired ? T.red : T.text }}>
+                  {isExpired ? 'Expired' : 'Active'}
+                </Text>
+                <Text style={{ color: T.muted, fontSize: 14, marginTop: 4 }}>
+                  {validUntil ? `Valid until ${validUntil.toLocaleDateString()}` : 'No payment history'}
+                </Text>
               </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Badge color={b.status==='paid'?'green':b.status==='overdue'?'red':'amber'} small>{b.status}</Badge>
-                {b.status !== 'paid' && <Btn variant="green" sm onClick={() => { setForm({}); setModal({ type: 'pay', ...b }); }} style={{ marginTop: 8 }}>Pay Now</Btn>}
-              </View>
+              {!isExpired && !expiringSoon && <Badge color="green" style={{ transform: [{scale:1.2}] }}>✅ Good</Badge>}
             </View>
+            
+            {(isExpired || expiringSoon) && (
+              <View style={{ marginTop: 20 }}>
+                {expiringSoon && <Text style={{ color: T.amber, marginBottom: 12, fontWeight: '600' }}>⚠️ Expiring soon. Please renew.</Text>}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <Btn variant="blue" style={{ flex: 1 }} onClick={() => { setForm({}); setModal({ type: 'renew', amount: 1200, months_added: 6 }); }}>Renew 6M</Btn>
+                  <Btn variant="green" style={{ flex: 1 }} onClick={() => { setForm({}); setModal({ type: 'renew', amount: 2400, months_added: 12 }); }}>Renew 1Y</Btn>
+                </View>
+              </View>
+            )}
           </Card>
-        ))}
-      </View>
-    );
+
+          <Text style={{ fontSize: 13, fontWeight: '700', color: T.text, marginBottom: 12 }}>PAYMENT HISTORY</Text>
+          {payments.length === 0 && <EmptyState icon="💰" message="No payment history" />}
+          {payments.map((p: any) => (
+            <Card key={p.id}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '700', color: T.text, fontSize: 16 }}>₹{p.amount} ({p.months_added} Months)</Text>
+                  <Text style={{ color: T.muted, fontSize: 13, marginTop: 2 }}>Submitted: {new Date(p.created_at).toLocaleDateString()}</Text>
+                  <Text style={{ color: T.dim, fontSize: 11, marginTop: 2 }}>UTR: {p.utr_number}</Text>
+                </View>
+                <Badge color={p.status==='approved'?'green':p.status==='rejected'?'red':'amber'} small>{p.status}</Badge>
+              </View>
+            </Card>
+          ))}
+        </View>
+      );
+    }
 
     if (currentTab === 'notices') return (
       <View>
@@ -204,7 +328,9 @@ export function ResidentDashboard({ route }: any) {
           <Avatar name={user?.name || '?'} size={80} />
           <Text style={{ color: T.text, fontSize: 24, fontWeight: '800', marginTop: 16 }}>{user?.name}</Text>
           <Text style={{ color: T.muted, fontSize: 16, marginTop: 4 }}>{user?.phone}</Text>
-          {user?.role && <Badge color="blue" style={{ marginTop: 12 }}>{user?.role}</Badge>}
+          {user?.email && <Text style={{ color: T.dim, fontSize: 13, marginTop: 4 }}>{user?.email}</Text>}
+          {flatStatus?.flat_number && <Text style={{ color: T.accent, fontSize: 15, fontWeight: '700', marginTop: 12 }}>🏠 Flat {flatStatus.flat_number}</Text>}
+          {user?.role && <Badge color="blue" style={{ marginTop: 12 }}>{user?.role?.toUpperCase()}</Badge>}
         </Card>
         <Btn variant="red" full onClick={logout} style={{ marginTop: 24 }}>Log Out</Btn>
       </View>
@@ -212,34 +338,45 @@ export function ResidentDashboard({ route }: any) {
   };
 
   return (
-    <PageLayout title="Resident" subtitle="RM2 Residency">
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20, marginHorizontal: -24, paddingHorizontal: 24 }}>
+    <PageLayout 
+      title="Resident" 
+      subtitle="RM2 Residency"
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
+    >
+      <ScrollView ref={tabScrollRef} horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20, marginHorizontal: -24, paddingHorizontal: 24 }}>
         <Tabs tabs={[
           { id: 'dashboard', label: 'Dashboard' },
-          { id: 'passes', label: 'Passes' },
-          { id: 'history', label: 'History' },
+          { id: 'history', label: 'Visitor History' },
           { id: 'bills', label: 'Bills' },
-          { id: 'notices', label: 'Notices' },
+          { id: 'passes', label: 'Passes' },
           { id: 'profile', label: 'Profile' },
         ]} active={currentTab} onChange={setCurrentTab} />
       </ScrollView>
 
-      {renderContent()}
+      <Animated.View {...panResponder.panHandlers} style={{ minHeight: Dimensions.get('window').height - 200, transform: [{ translateX: slideAnim }] }}>
+        {renderContent()}
+      </Animated.View>
 
-      {modal?.type === 'pay' && (
-        <Modal title={`Pay ${modal.bill_period}`} subtitle={`Amount: ₹${modal.amount}`} onClose={() => setModal(null)}>
-          <Select label="Payment Mode" value={form.payment_mode} onChange={(v: string) => setForm({...form, payment_mode: v})} options={[{value:'upi',label:'UPI'},{value:'card',label:'Card'},{value:'cash',label:'Cash'}]} />
-          <Btn full variant="green" onClick={payBill}>Confirm Payment</Btn>
+      {modal?.type === 'renew' && (
+        <Modal title={`Renew Maintenance`} subtitle={`Amount: ₹${modal?.amount} for ${modal?.months_added} Months`} onClose={() => setModal(null)}>
+          <Text style={{ color: T.muted, marginBottom: 16 }}>1. Tap the button below to open your UPI app and pay.</Text>
+          <Btn variant="blue" full onClick={() => openUPI(modal?.amount)} style={{ marginBottom: 24 }}>Pay via UPI App</Btn>
+          
+          <Text style={{ color: T.muted, marginBottom: 12 }}>2. Enter the 12-digit UTR/Reference number below after paying.</Text>
+          <Input label="UTR Number" placeholder="e.g. 123456789012" value={form?.utr_number || ''} onChange={(v: string) => setForm((prev: any) => ({...(prev || {}), utr_number: v}))} />
+          <Btn full variant="green" onClick={submitRenewal} style={{ marginTop: 8 }}>Submit for Approval</Btn>
         </Modal>
       )}
 
       {modal?.type === 'pre' && (
         <Modal title="Pre-Approve Guest" onClose={() => setModal(null)}>
-          <Input label="Guest Name" placeholder="Full name" value={form.visitor_name} onChange={(v: string) => setForm({...form, visitor_name: v})} />
-          <Input label="Guest Phone" placeholder="Phone number" value={form.visitor_phone} onChange={(v: string) => setForm({...form, visitor_phone: v})} />
-          <Input label="Purpose" placeholder="E.g. Party" value={form.purpose} onChange={(v: string) => setForm({...form, purpose: v})} />
-          <Input label="Valid Until (YYYY-MM-DD)" placeholder="2026-12-31" value={form.valid_until} onChange={(v: string) => setForm({...form, valid_until: v})} />
-          <Btn full onClick={createPre}>Save Pre-Approval</Btn>
+          <Input label="Guest Name *" placeholder="Full name" value={form?.visitor_name || ''} onChange={(v: string) => setForm((prev: any) => ({...(prev || {}), visitor_name: v}))} />
+          <Input label="Guest Phone *" placeholder="Phone number" value={form?.visitor_phone || ''} onChange={(v: string) => setForm((prev: any) => ({...(prev || {}), visitor_phone: v}))} />
+          <Input label="Purpose" placeholder="E.g. Party" value={form?.purpose || ''} onChange={(v: string) => setForm((prev: any) => ({...(prev || {}), purpose: v}))} />
+          <Text style={{ color: T.text, fontWeight: '700', fontSize: 14, marginTop: 12, marginBottom: 4 }}>Valid Until *</Text>
+          <Calendar value={form?.valid_until || ''} onChange={(v: string) => setForm((prev: any) => ({...(prev || {}), valid_until: v}))} />
+          <Btn full onClick={createPre} style={{ marginTop: 16 }}>Save Pre-Approval</Btn>
         </Modal>
       )}
     </PageLayout>

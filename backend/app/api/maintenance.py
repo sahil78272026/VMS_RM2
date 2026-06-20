@@ -1,8 +1,3 @@
-"""
-Maintenance Routes — /api/v1/maintenance
-Admin generates bills. Residents view and pay.
-"""
-
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -13,123 +8,93 @@ from app.repositories import FlatUserRepository
 from app.utils.response import success, error
 from app.utils.exceptions import AppException
 
-
-
 router = APIRouter(prefix="/api/v1/maintenance", tags=["maintenance"])
 
 @router.get("/my")
-async def get_my_bills(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """Resident: view all bills for their flat."""
+async def get_my_maintenance(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Resident: get current flat validity and payment history."""
     try:
         flat_user_repo = FlatUserRepository(db)
         maintenance_service = MaintenanceService(db)
-        user_id   = current_user.id
-        flat_user = flat_user_repo.get_by_user(user_id)
+        flat_user = flat_user_repo.get_by_user(current_user.id)
         if not flat_user:
             return error("Flat not found", "NOT_FOUND", status_code=404)
 
-        bills = maintenance_service.get_by_flat(flat_user.flat_id)
-        return success("Bills fetched", data=[b.to_dict() for b in bills])
+        flat_status = maintenance_service.get_flat_maintenance(flat_user.flat_id)
+        payments = maintenance_service.get_my_payments(flat_user.flat_id)
+        
+        return success("Maintenance details fetched", data={
+            "flat": flat_status,
+            "payments": payments
+        })
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)
     except Exception as e:
-        return error("Failed to fetch bills", "SERVER_ERROR", str(e), 500)
+        return error("Failed to fetch details", "SERVER_ERROR", str(e), 500)
 
 
-@router.get("/{bill_id}")
-async def get_bill(bill_id: int, request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """Get a single bill's details."""
+@router.post("/submit")
+async def submit_payment(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Resident: submit a UTR for maintenance renewal."""
     try:
         flat_user_repo = FlatUserRepository(db)
         maintenance_service = MaintenanceService(db)
-        bill = maintenance_service.get_by_id(bill_id)
-        return success("Bill fetched", data=bill.to_dict())
+        flat_user = flat_user_repo.get_by_user(current_user.id)
+        if not flat_user:
+            return error("Flat not found", "NOT_FOUND", status_code=404)
+
+        data = await request.json()
+        payment = maintenance_service.submit_payment(flat_user.flat_id, current_user.id, data)
+        return success("Payment submitted successfully", data=payment.to_dict(), status_code=201)
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)
     except Exception as e:
-        return error("Failed to fetch bill", "SERVER_ERROR", str(e), 500)
+        return error("Failed to submit payment", "SERVER_ERROR", str(e), 500)
 
 
-@router.post("")
-async def generate_bills(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """
-    Admin: generate maintenance bills.
-    Can generate for a single flat or all flats at once.
-    Body: { flat_id (optional), bill_period, schedule, amount, due_date }
-    If flat_id is omitted — generates for ALL occupied flats.
-    """
+@router.get("/admin/pending")
+async def admin_get_pending(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Admin: get all pending UTRs for approval."""
     try:
-        flat_user_repo = FlatUserRepository(db)
         maintenance_service = MaintenanceService(db)
-        data  = await request.json()
-        bills = maintenance_service.generate(data)
-        return success(
-            f"{len(bills)} bill(s) generated successfully",
-            data=[b.to_dict() for b in bills],
-            status_code=201
-        )
+        payments = maintenance_service.admin_get_pending_payments()
+        return success("Pending payments fetched", data=payments)
+    except Exception as e:
+        return error("Failed to fetch pending payments", "SERVER_ERROR", str(e), 500)
+
+
+@router.get("/admin/flats")
+async def admin_get_flats(request: Request, page: int = 1, per_page: int = 20, query: str = "", db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Admin: get all flats and their validity statuses (paginated)."""
+    try:
+        maintenance_service = MaintenanceService(db)
+        paginated_flats = maintenance_service.admin_get_all_flats(page=page, per_page=per_page, search_query=query)
+        return success("Flats fetched", data=paginated_flats)
+    except Exception as e:
+        return error("Failed to fetch flats", "SERVER_ERROR", str(e), 500)
+
+
+@router.post("/admin/approve/{payment_id}")
+async def admin_approve(payment_id: int, request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Admin: approve a UTR payment."""
+    try:
+        maintenance_service = MaintenanceService(db)
+        payment = maintenance_service.admin_approve_payment(payment_id)
+        return success("Payment approved", data=payment.to_dict())
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)
     except Exception as e:
-        return error("Failed to generate bills", "SERVER_ERROR", str(e), 500)
+        return error("Failed to approve payment", "SERVER_ERROR", str(e), 500)
 
 
-@router.patch("/{bill_id}/pay")
-async def pay_bill(bill_id: int, request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """
-    Resident: record a payment for a bill.
-    Body: { payment_mode, transaction_ref, amount_paid }
-    """
+@router.post("/admin/reject/{payment_id}")
+async def admin_reject(payment_id: int, request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Admin: reject a UTR payment."""
     try:
-        flat_user_repo = FlatUserRepository(db)
         maintenance_service = MaintenanceService(db)
-        user_id = current_user.id
-        data    = await request.json()
-        bill    = maintenance_service.pay(bill_id, user_id, data)
-        return success("Payment recorded successfully", data=bill.to_dict())
+        payment = maintenance_service.admin_reject_payment(payment_id)
+        return success("Payment rejected", data=payment.to_dict())
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)
     except Exception as e:
-        return error("Failed to record payment", "SERVER_ERROR", str(e), 500)
-
-
-@router.get("")
-async def get_all_bills(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """Admin: all bills with optional filters."""
-    try:
-        flat_user_repo = FlatUserRepository(db)
-        maintenance_service = MaintenanceService(db)
-        flat_id  = request.query_params.get("flat_id")
-        status   = request.query_params.get("status")
-        schedule = request.query_params.get("schedule")
-        page     = int(request.query_params.get("page", 1))
-        per_page = int(request.query_params.get("per_page", 20))
-
-        result = maintenance_service.get_all(
-            flat_id=flat_id,
-            status=status,
-            schedule=schedule,
-            page=page,
-            per_page=per_page
-        )
-        return success(
-            "Bills fetched",
-            data=[b.to_dict() for b in result["items"]],
-            meta=result["meta"]
-        )
-    except AppException as e:
-        return error(e.message, e.code, e.details, e.status_code)
-    except Exception as e:
-        return error("Failed to fetch bills", "SERVER_ERROR", str(e), 500)
-
-
-@router.get("/overdue")
-async def get_overdue_bills(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """Admin: all overdue bills."""
-    try:
-        flat_user_repo = FlatUserRepository(db)
-        maintenance_service = MaintenanceService(db)
-        bills = maintenance_service.get_overdue()
-        return success("Overdue bills fetched", data=[b.to_dict() for b in bills])
-    except Exception as e:
-        return error("Failed to fetch overdue bills", "SERVER_ERROR", str(e), 500)
+        return error("Failed to reject payment", "SERVER_ERROR", str(e), 500)

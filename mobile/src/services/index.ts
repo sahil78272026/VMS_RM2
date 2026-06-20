@@ -94,11 +94,11 @@ export const FrequentPassService = {
 
 export const MaintenanceService = {
   getMy: () => api.get('/maintenance/my'),
-  getById: (id: string) => api.get(`/maintenance/${id}`),
-  generate: (d: any) => api.post('/maintenance', d),
-  pay: (id: string, d: any) => api.patch(`/maintenance/${id}/pay`, d),
-  getAll: (p?: any) => api.get('/maintenance', { params: p }),
-  getOverdue: () => api.get('/maintenance/overdue'),
+  submitPayment: (d: any) => api.post('/maintenance/submit', d),
+  getPending: () => api.get('/maintenance/admin/pending'),
+  getFlats: (p?: any) => api.get('/maintenance/admin/flats', { params: p }),
+  approve: (id: string) => api.post(`/maintenance/admin/approve/${id}`),
+  reject: (id: string) => api.post(`/maintenance/admin/reject/${id}`),
 };
 
 export const AnnouncementService = {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, Image } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { T, Card, Btn, Input, PageLayout } from '../../components/UI';
 import { AuthService, FlatService } from '../../services';
@@ -15,7 +15,8 @@ export function LandingScreen({ navigation }: any) {
   return (
     <View style={{ flex: 1, backgroundColor: T.bg, padding: 24, justifyContent: 'center' }}>
       <View style={{ alignItems: 'center', marginBottom: 40 }}>
-        <Text style={{ fontSize: 40, fontWeight: '800', color: T.text, marginBottom: 8 }}>RM2 <Text style={{ color: T.accent }}>Gate</Text></Text>
+        <Image source={require('../../../assets/logo.png')} style={{ width: 110, height: 110, borderRadius: 24, marginBottom: 20, borderWidth: 1, borderColor: T.accent + '33' }} />
+        <Text style={{ fontSize: 40, fontWeight: '800', color: T.text, marginBottom: 8 }}>RM2 <Text style={{ color: T.accent }}>secure</Text></Text>
         <Text style={{ fontSize: 15, color: T.muted }}>Visitor Management System</Text>
       </View>
       

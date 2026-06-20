@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Modal as RNModal } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Modal as RNModal, RefreshControl } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 
 export const T = {
@@ -50,13 +50,18 @@ export const Btn = ({ children, onClick, variant='primary', sm, full, disabled, 
   );
 };
 
-export const Input = ({ label, type='text', placeholder, value, onChange, icon, required, secureTextEntry }: any) => {
+export const Input = ({ label, type='text', placeholder, value, onChange, icon, required, secureTextEntry, onClear }: any) => {
   return (
     <View style={{ marginBottom: 12 }}>
       {label && <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>{label} {required && <Text style={{color: T.red}}>*</Text>}</Text>}
       <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14 }}>
         {icon && <Text style={{ fontSize: 16, marginRight: 10, opacity: 0.6 }}>{icon}</Text>}
         <TextInput style={{ flex: 1, color: T.text, fontSize: 15, paddingVertical: 12 }} placeholder={placeholder} placeholderTextColor={T.dim} value={value} onChangeText={onChange} secureTextEntry={secureTextEntry || type === 'password'} />
+        {onClear && value ? (
+          <TouchableOpacity onPress={onClear} style={{ padding: 4, marginLeft: 6 }}>
+            <Text style={{ color: T.muted, fontSize: 16, fontWeight: '700' }}>✕</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
@@ -81,7 +86,7 @@ export const Textarea = ({ label, value, onChange, placeholder, required }: any)
   </View>
 );
 
-export const PageLayout = ({ children, title, subtitle, action, scroll=true }: any) => {
+export const PageLayout = ({ children, title, subtitle, action, scroll=true, onRefresh, refreshing=false, onScroll, scrollEventThrottle=16, scrollRef, floating }: any) => {
   const content = (
     <View style={{ padding: 24, paddingBottom: 100 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
@@ -94,7 +99,24 @@ export const PageLayout = ({ children, title, subtitle, action, scroll=true }: a
       {children}
     </View>
   );
-  return scroll ? <ScrollView style={{ flex: 1, backgroundColor: T.bg }}>{content}</ScrollView> : <View style={{ flex: 1, backgroundColor: T.bg }}>{content}</View>;
+  return (
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
+      {scroll ? (
+        <ScrollView 
+          ref={scrollRef}
+          style={{ flex: 1 }} 
+          refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.accent} /> : undefined}
+          onScroll={onScroll}
+          scrollEventThrottle={scrollEventThrottle}
+        >
+          {content}
+        </ScrollView>
+      ) : (
+        <View style={{ flex: 1 }}>{content}</View>
+      )}
+      {floating}
+    </View>
+  );
 };
 
 export const EmptyState = ({ icon='📭', message='Nothing here yet', sub }: any) => (
@@ -146,3 +168,121 @@ export const Tabs = ({ tabs, active, onChange }: any) => (
     ))}
   </View>
 );
+
+export const Calendar = ({ value, onChange }: any) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const formatDate = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const todayStr = formatDate(new Date());
+
+  const daysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
+  const startDayOfMonth = (y: number, m: number) => new Date(y, m, 1).getDay();
+
+  const handlePrevMonth = () => {
+    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const totalDays = daysInMonth(year, month);
+  const startDay = startDayOfMonth(year, month);
+
+  const monthsList = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const daysGrid = [];
+  for (let i = 0; i < startDay; i++) {
+    daysGrid.push(null);
+  }
+  for (let i = 1; i <= totalDays; i++) {
+    daysGrid.push(new Date(year, month, i));
+  }
+
+  return (
+    <View style={{ backgroundColor: T.surface2, padding: 12, borderRadius: 16, borderWidth: 1, borderColor: T.border, marginVertical: 12 }}>
+      {/* Month Selector */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <TouchableOpacity onPress={handlePrevMonth} style={{ padding: 6 }}>
+          <Text style={{ color: T.accent, fontSize: 16, fontWeight: 'bold' }}>◀</Text>
+        </TouchableOpacity>
+        <Text style={{ color: T.text, fontWeight: '700', fontSize: 15 }}>{monthsList[month]} {year}</Text>
+        <TouchableOpacity onPress={handleNextMonth} style={{ padding: 6 }}>
+          <Text style={{ color: T.accent, fontSize: 16, fontWeight: 'bold' }}>▶</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Week Header */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 6 }}>
+        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d, i) => (
+          <Text key={i} style={{ color: T.muted, fontSize: 12, width: 32, textAlign: 'center', fontWeight: '600' }}>{d}</Text>
+        ))}
+      </View>
+
+      {/* Days Grid */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+        {daysGrid.map((d, i) => {
+          if (d === null) {
+            return <View key={`empty-${i}`} style={{ width: '14.28%', height: 36 }} />;
+          }
+          const dStr = formatDate(d);
+          const isSelected = value === dStr;
+          const isToday = todayStr === dStr;
+
+          return (
+            <TouchableOpacity
+              key={dStr}
+              onPress={() => onChange(dStr)}
+              style={{
+                width: '14.28%',
+                height: 36,
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderRadius: 18,
+                backgroundColor: isSelected ? T.accent : 'transparent',
+                borderWidth: isToday ? 1.5 : 0,
+                borderColor: T.accent,
+              }}
+            >
+              <Text style={{ 
+                color: isSelected ? T.bg : isToday ? T.accent : T.text, 
+                fontWeight: isSelected || isToday ? '700' : '400',
+                fontSize: 13 
+              }}>
+                {d.getDate()}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Today Shortcut Button */}
+      <TouchableOpacity
+        onPress={() => onChange(todayStr)}
+        style={{
+          marginTop: 12,
+          paddingVertical: 8,
+          backgroundColor: T.surface,
+          borderColor: T.border,
+          borderWidth: 1,
+          borderRadius: 8,
+          alignItems: 'center'
+        }}
+      >
+        <Text style={{ color: T.accent, fontSize: 13, fontWeight: '700' }}>⚡ Select Today</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+

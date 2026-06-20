@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Alert, ScrollView, BackHandler } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { View, Text, Alert, ScrollView, BackHandler, PanResponder, Dimensions, Animated } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { VisitorLogService, GateSessionService, GateService, FlatService } from '../../services';
 import { T, Card, Badge, Avatar, Btn, Input, Select, PageLayout, StatCard, EmptyState, LoadingScreen, Tabs } from '../../components/UI';
@@ -8,6 +8,45 @@ import { useAuth } from '../../context/AuthContext';
 export function GuardDashboard({ navigation }: any) {
   const { user, logout } = useAuth();
   const [currentTab, setCurrentTab] = useState('dashboard');
+  const tabOrder = ['dashboard', 'register', 'inside', 'qr', 'profile'];
+  const currentTabRef = useRef(currentTab);
+  currentTabRef.current = currentTab;
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > Math.abs(gs.dy) && Math.abs(gs.dx) > 15,
+    onPanResponderRelease: (_, gs) => {
+      if (Math.abs(gs.dx) > 30 && Math.abs(gs.vx) > 0.15) {
+        const idx = tabOrder.indexOf(currentTabRef.current);
+        if (gs.dx < 0 && idx < tabOrder.length - 1) setCurrentTab(tabOrder[idx + 1]);
+        if (gs.dx > 0 && idx > 0) setCurrentTab(tabOrder[idx - 1]);
+      }
+    },
+  }), []);
+
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const prevTabRef = useRef(currentTab);
+  const tabScrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const prevIdx = tabOrder.indexOf(prevTabRef.current);
+    const newIdx = tabOrder.indexOf(currentTab);
+    if (prevIdx !== newIdx) {
+      const screenWidth = Dimensions.get('window').width;
+      const startVal = newIdx > prevIdx ? screenWidth * 0.25 : -screenWidth * 0.25;
+      slideAnim.setValue(startVal);
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 60,
+        friction: 10,
+        useNativeDriver: true,
+      }).start();
+    }
+    prevTabRef.current = currentTab;
+
+    const tabOffsets: any = { dashboard: 0, register: 30, inside: 160, qr: 250, profile: 340 };
+    tabScrollRef.current?.scrollTo({ x: tabOffsets[currentTab] || 0, animated: true });
+  }, [currentTab]);
 
   useEffect(() => {
     const backAction = () => {
@@ -217,7 +256,7 @@ export function GuardDashboard({ navigation }: any) {
 
   return (
     <PageLayout title="Guard" subtitle={session ? `On Duty: ${session.gate?.name}` : "Off Duty"} action={session ? <Btn variant="red" sm onClick={endShift}>End Shift</Btn> : null}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20, marginHorizontal: -24, paddingHorizontal: 24 }}>
+      <ScrollView ref={tabScrollRef} horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20, marginHorizontal: -24, paddingHorizontal: 24 }}>
         <Tabs tabs={[
           { id: 'dashboard', label: 'Dashboard' },
           { id: 'register', label: 'Register Visitor' },
@@ -227,7 +266,9 @@ export function GuardDashboard({ navigation }: any) {
         ]} active={currentTab} onChange={setCurrentTab} />
       </ScrollView>
 
-      {renderContent()}
+      <Animated.View {...panResponder.panHandlers} style={{ minHeight: Dimensions.get('window').height - 200, transform: [{ translateX: slideAnim }] }}>
+        {renderContent()}
+      </Animated.View>
     </PageLayout>
   );
 }

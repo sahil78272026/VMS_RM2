@@ -16,6 +16,7 @@ def create_app() -> FastAPI:
         import re
         logger = logging.getLogger("uvicorn")
         db_url = os.getenv("DATABASE_URL", "sqlite:///rm2_vms.db")
+        storage = os.getenv("SUPABASE_S3_BUCKET")
         
         # Mask password in URL for safe logging
         masked_url = re.sub(r":([^@]+)@", ":***@", db_url)
@@ -24,8 +25,7 @@ def create_app() -> FastAPI:
         print("🚀  STARTING RM2 VMS IN [DEV] MODE  🚀")
         print("="*50)
         print(f"📦 Database : {masked_url}")
-        print(f"🔑 Twilio   : {'Configured' if os.getenv('TWILIO_ACCOUNT_SID') else 'Not Set'}")
-        print(f"☁️  Cloudinary: {'Configured' if os.getenv('CLOUDINARY_CLOUD_NAME') else 'Not Set'}")
+        print(f"Storage", storage)
         print("="*50 + "\n")
 
     os.makedirs("static/visitors", exist_ok=True)
@@ -139,6 +139,27 @@ def create_app() -> FastAPI:
             },
             "error": None
         }
+
+    def start_scheduler():
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from app.services.maintenance_service import MaintenanceService
+        from app.database import SessionLocal
+        
+        def job():
+            db = SessionLocal()
+            try:
+                ms = MaintenanceService(db)
+                ms.daily_maintenance_check()
+            finally:
+                db.close()
+
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(job, 'cron', hour=9, minute=0)
+        scheduler.start()
+
+    @app.on_event("startup")
+    async def startup_event():
+        start_scheduler()
 
     return app
 

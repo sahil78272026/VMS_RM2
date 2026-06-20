@@ -21,7 +21,6 @@ class UserRepository(BaseRepository):
         super().__init__(User, db)
 
     def get_by_phone(self, phone: str):
-        print("self.db.query(User).filter_by(phone=phone).first():", self.db.query(User).filter_by(phone=phone).first())
         return self.db.query(User).filter_by(phone=phone).first()
 
     def get_by_email(self, email: str):

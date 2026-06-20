@@ -44,11 +44,13 @@ class Flat(Base):
     id          = Column(Integer, primary_key=True)
     flat_number = Column(String(20), nullable=False, unique=True)
     status      = Column(Enum("occupied", "vacant", name="flat_status"), default="vacant", nullable=False)
+    maintenance_valid_until = Column(Date, nullable=True)
 
     # Relationships
     flat_users         = relationship("FlatUser",         back_populates="flat",  lazy="dynamic")
     visitor_logs       = relationship("VisitorLog",       back_populates="flat",  lazy="dynamic")
     maintenance_bills  = relationship("MaintenanceBill",  back_populates="flat",  lazy="dynamic")
+    maintenance_payments = relationship("MaintenancePayment", back_populates="flat", lazy="dynamic")
     panic_alerts       = relationship("PanicAlert",       back_populates="flat",  lazy="dynamic")
 
     def to_dict(self):
@@ -56,6 +58,7 @@ class Flat(Base):
             "id":          self.id,
             "flat_number": self.flat_number,
             "status":      self.status,
+            "maintenance_valid_until": self.maintenance_valid_until.isoformat() if self.maintenance_valid_until else None,
         }
 
 
@@ -531,6 +534,37 @@ class MaintenanceBill(Base):
             "paid_at":         self.paid_at.isoformat() if self.paid_at else None,
             "receipt_url":     self.receipt_url,
             "generated_at":    self.generated_at.isoformat(),
+        }
+
+class MaintenancePayment(Base):
+    __tablename__ = "maintenance_payments"
+
+    id              = Column(Integer, primary_key=True)
+    flat_id         = Column(Integer, ForeignKey("flats.id"), nullable=False)
+    paid_by         = Column(Integer, ForeignKey("users.id"), nullable=False)
+    amount          = Column(Numeric(10, 2), nullable=False)
+    months_added    = Column(Integer, nullable=False)
+    utr_number      = Column(String(100), nullable=False)
+    status          = Column(Enum("pending", "approved", "rejected", name="maint_payment_status"), default="pending", nullable=False)
+    created_at      = Column(DateTime, default=datetime.utcnow, nullable=False)
+    processed_at    = Column(DateTime, nullable=True)
+
+    # Relationships
+    flat         = relationship("Flat", back_populates="maintenance_payments")
+    paid_by_user = relationship("User", foreign_keys=[paid_by])
+
+    def to_dict(self):
+        return {
+            "id":              self.id,
+            "flat_id":         self.flat_id,
+            "flat_number":     self.flat.flat_number if self.flat else None,
+            "paid_by":         self.paid_by,
+            "amount":          float(self.amount),
+            "months_added":    self.months_added,
+            "utr_number":      self.utr_number,
+            "status":          self.status,
+            "created_at":      self.created_at.isoformat() if self.created_at else None,
+            "processed_at":    self.processed_at.isoformat() if self.processed_at else None,
         }
 
 
