@@ -38,7 +38,8 @@ export const AuthProvider = ({ children }: any) => {
           finalStatus = status;
         }
         if (finalStatus === 'granted') {
-          const tokenData = await Notifications.getExpoPushTokenAsync();
+          const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+          const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
           expo_push_token = tokenData.data;
         }
       }
