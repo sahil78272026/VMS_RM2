@@ -29,7 +29,12 @@ class MaintenanceService:
         if not data.get("amount"): raise ValidationError({"amount": "Required"})
         if not data.get("utr_number"): raise ValidationError({"utr_number": "Required"})
 
+        flat = self.flat_repo.get_by_id(flat_id)
+        if not flat:
+            raise NotFoundError("Flat")
+
         payment = MaintenancePayment(
+            society_id=flat.society_id,
             flat_id=flat_id,
             paid_by=user_id,
             amount=data["amount"],
@@ -42,14 +47,19 @@ class MaintenanceService:
         self.db.refresh(payment)
         return payment
 
-    def admin_get_pending_payments(self):
-        payments = self.db.query(MaintenancePayment).filter_by(status="pending").order_by(MaintenancePayment.created_at.desc()).all()
+    def admin_get_pending_payments(self, society_id: int = None):
+        q = self.db.query(MaintenancePayment).filter_by(status="pending")
+        if society_id:
+            q = q.filter(MaintenancePayment.society_id == society_id)
+        payments = q.order_by(MaintenancePayment.created_at.desc()).all()
         return [p.to_dict() for p in payments]
 
-    def admin_get_all_flats(self, page: int = 1, per_page: int = 20, search_query: str = ""):
+    def admin_get_all_flats(self, society_id: int = None, page: int = 1, per_page: int = 20, search_query: str = ""):
         from app.models import Flat
         from sqlalchemy import func, cast, Integer, text
         q = self.db.query(Flat)
+        if society_id:
+            q = q.filter(Flat.society_id == society_id)
         if search_query:
             q = q.filter(Flat.flat_number.ilike(f"%{search_query}%"))
         # Natural sort: extract numeric prefix as integer, then sort by suffix
@@ -68,10 +78,12 @@ class MaintenanceService:
             "pages": paginated["meta"]["pages"]
         }
 
-    def admin_approve_payment(self, payment_id: int):
+    def admin_approve_payment(self, payment_id: int, society_id: int = None):
         payment = self.db.query(MaintenancePayment).filter_by(id=payment_id).first()
         if not payment:
             raise NotFoundError("Payment")
+        if society_id and payment.society_id != society_id:
+            raise ValidationError({"payment": "Payment does not belong to this society"})
         if payment.status != "pending":
             raise ConflictError("Payment is not pending")
 
@@ -94,10 +106,12 @@ class MaintenanceService:
         
         return payment
 
-    def admin_reject_payment(self, payment_id: int):
+    def admin_reject_payment(self, payment_id: int, society_id: int = None):
         payment = self.db.query(MaintenancePayment).filter_by(id=payment_id).first()
         if not payment:
             raise NotFoundError("Payment")
+        if society_id and payment.society_id != society_id:
+            raise ValidationError({"payment": "Payment does not belong to this society"})
         if payment.status != "pending":
             raise ConflictError("Payment is not pending")
 

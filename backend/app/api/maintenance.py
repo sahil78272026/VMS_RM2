@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, Request
+from typing import Optional
+from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_active_society_id
 
 from app.services.maintenance_service import MaintenanceService
 from app.repositories import FlatUserRepository
@@ -53,33 +54,62 @@ async def submit_payment(request: Request, db: Session = Depends(get_db), curren
 
 
 @router.get("/admin/pending")
-async def admin_get_pending(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """Admin: get all pending UTRs for approval."""
+async def admin_get_pending(
+    request: Request,
+    society_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Admin: get pending UTRs for approval in the active society."""
     try:
+        header_society_id = request.headers.get("X-Society-ID")
+        target_society_id = society_id or (int(header_society_id) if header_society_id and header_society_id.isdigit() else None)
         maintenance_service = MaintenanceService(db)
-        payments = maintenance_service.admin_get_pending_payments()
+        payments = maintenance_service.admin_get_pending_payments(society_id=target_society_id)
         return success("Pending payments fetched", data=payments)
     except Exception as e:
         return error("Failed to fetch pending payments", "SERVER_ERROR", str(e), 500)
 
 
 @router.get("/admin/flats")
-async def admin_get_flats(request: Request, page: int = 1, per_page: int = 20, query: str = "", db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """Admin: get all flats and their validity statuses (paginated)."""
+async def admin_get_flats(
+    request: Request,
+    society_id: Optional[int] = Query(None),
+    page: int = 1,
+    per_page: int = 20,
+    query: str = "",
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Admin: get all flats and their validity statuses for the active society (paginated)."""
     try:
+        header_society_id = request.headers.get("X-Society-ID")
+        target_society_id = society_id or (int(header_society_id) if header_society_id and header_society_id.isdigit() else None)
         maintenance_service = MaintenanceService(db)
-        paginated_flats = maintenance_service.admin_get_all_flats(page=page, per_page=per_page, search_query=query)
+        paginated_flats = maintenance_service.admin_get_all_flats(
+            society_id=target_society_id,
+            page=page,
+            per_page=per_page,
+            search_query=query
+        )
         return success("Flats fetched", data=paginated_flats)
     except Exception as e:
         return error("Failed to fetch flats", "SERVER_ERROR", str(e), 500)
 
 
 @router.post("/admin/approve/{payment_id}")
-async def admin_approve(payment_id: int, request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """Admin: approve a UTR payment."""
+async def admin_approve(
+    payment_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Admin: approve a UTR payment within society scope."""
     try:
+        header_society_id = request.headers.get("X-Society-ID")
+        target_society_id = int(header_society_id) if header_society_id and header_society_id.isdigit() else None
         maintenance_service = MaintenanceService(db)
-        payment = maintenance_service.admin_approve_payment(payment_id)
+        payment = maintenance_service.admin_approve_payment(payment_id, society_id=target_society_id)
         return success("Payment approved", data=payment.to_dict())
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)
@@ -88,11 +118,18 @@ async def admin_approve(payment_id: int, request: Request, db: Session = Depends
 
 
 @router.post("/admin/reject/{payment_id}")
-async def admin_reject(payment_id: int, request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """Admin: reject a UTR payment."""
+async def admin_reject(
+    payment_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Admin: reject a UTR payment within society scope."""
     try:
+        header_society_id = request.headers.get("X-Society-ID")
+        target_society_id = int(header_society_id) if header_society_id and header_society_id.isdigit() else None
         maintenance_service = MaintenanceService(db)
-        payment = maintenance_service.admin_reject_payment(payment_id)
+        payment = maintenance_service.admin_reject_payment(payment_id, society_id=target_society_id)
         return success("Payment rejected", data=payment.to_dict())
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)

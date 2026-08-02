@@ -1,41 +1,45 @@
 """
 Flats Routes — /api/v1/flats
 
-Flats are SEEDED at setup — never created or deleted via API.
-Flat numbers (1, 1A, 1B, 2, 2A...) are fixed for RM2 Residency.
-
 Endpoints:
-  GET   /api/v1/flats              → All roles: dropdown during registration
+  GET   /api/v1/flats              → All roles: list flats by society
+  POST  /api/v1/flats              → Admin: create flat in society
   GET   /api/v1/flats/:id          → Any role: single flat detail
   PATCH /api/v1/flats/:id/status   → Admin only: update occupied/vacant
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
+from typing import Optional
 from app.database import get_db
-from app.api.deps import get_current_user
-
 from app.services.flat_service import FlatService
 from app.utils.response import success, error
 from app.utils.exceptions import AppException
 
 
-
 router = APIRouter(prefix="/api/v1/flats", tags=["flats"])
 
+
 @router.get("")
-async def get_all_flats(request: Request, db: Session = Depends(get_db)):
+async def get_all_flats(
+    request: Request,
+    society_id: Optional[int] = Query(None),
+    status: Optional[str] = Query(None),
+    page: int = Query(1),
+    per_page: int = Query(100),
+    db: Session = Depends(get_db)
+):
     """
-    All roles: list all flats.
+    All roles: list all flats for a society.
     Residents use this for the flat selection dropdown on registration.
-    Query: ?status=occupied|vacant  &page=  &per_page=100
+    Query: ?society_id=1&status=occupied|vacant&page=1&per_page=100
     """
     try:
         flat_service = FlatService(db)
-        status   = request.query_params.get("status")
-        page     = int(request.query_params.get("page", 1))
-        per_page = int(request.query_params.get("per_page", 100))
-        result   = flat_service.get_all(status=status, page=page, per_page=per_page)
+        header_society_id = request.headers.get("X-Society-ID")
+        target_society_id = society_id or (int(header_society_id) if header_society_id and header_society_id.isdigit() else None)
+
+        result = flat_service.get_all(society_id=target_society_id, status=status, page=page, per_page=per_page)
         return success(
             "Flats fetched",
             data=[f.to_dict() for f in result["items"]],
@@ -45,6 +49,20 @@ async def get_all_flats(request: Request, db: Session = Depends(get_db)):
         return error(e.message, e.code, e.details, e.status_code)
     except Exception as e:
         return error("Failed to fetch flats", "SERVER_ERROR", str(e), 500)
+
+
+@router.post("")
+async def create_flat(request: Request, db: Session = Depends(get_db)):
+    """Admin: create a single flat in a society."""
+    try:
+        flat_service = FlatService(db)
+        data = await request.json()
+        flat = flat_service.create(data)
+        return success("Flat created", data=flat.to_dict(), status_code=201)
+    except AppException as e:
+        return error(e.message, e.code, e.details, e.status_code)
+    except Exception as e:
+        return error("Failed to create flat", "SERVER_ERROR", str(e), 500)
 
 
 @router.get("/{flat_id}")
@@ -64,8 +82,6 @@ async def get_flat(flat_id: int, request: Request, db: Session = Depends(get_db)
 async def update_flat_status(flat_id: int, request: Request, db: Session = Depends(get_db)):
     """
     Admin: update flat status only — occupied | vacant.
-    This is the ONLY write operation on flats via API.
-    Flat numbers are seeded at setup and never changed.
     """
     try:
         flat_service = FlatService(db)

@@ -3,25 +3,32 @@ Guards Routes — /api/v1/guards
 Admin manages guard accounts. Guards can view their own profile.
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
+from typing import Optional
 from app.database import get_db
 from app.api.deps import get_current_user
-
 from app.services.guard_service import GuardService
 from app.utils.response import success, error
 from app.utils.exceptions import AppException
 
 
-
 router = APIRouter(prefix="/api/v1/guards", tags=["guards"])
 
+
 @router.get("")
-async def get_all_guards(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
-    """Admin: list all guards."""
+async def get_all_guards(
+    request: Request,
+    society_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Admin: list all guards for a society."""
     try:
         guard_service = GuardService(db)
-        guards = guard_service.get_all()
+        header_society_id = request.headers.get("X-Society-ID")
+        target_society_id = society_id or (int(header_society_id) if header_society_id and header_society_id.isdigit() else None)
+        guards = guard_service.get_all(society_id=target_society_id)
         return success("Guards fetched", data=[g.to_dict() for g in guards])
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)
@@ -65,6 +72,9 @@ async def create_guard(request: Request, db: Session = Depends(get_db), current_
     try:
         guard_service = GuardService(db)
         data  = await request.json()
+        header_society_id = request.headers.get("X-Society-ID")
+        if "society_id" not in data and header_society_id and header_society_id.isdigit():
+            data["society_id"] = int(header_society_id)
         guard = guard_service.create(data)
         return success("Guard account created", data=guard.to_dict(), status_code=201)
     except AppException as e:

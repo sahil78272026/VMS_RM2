@@ -17,15 +17,13 @@ class AppException(Exception):
         super().__init__(message)
 
 
-# ── Auth Exceptions ────────────────────────────────────────────────────────
-
 class InvalidCredentialsError(AppException):
-    def __init__(self):
-        super().__init__("Invalid phone or password", "INVALID_CREDENTIALS", 401)
+    def __init__(self, message: str = "Invalid phone or password"):
+        super().__init__(message, "INVALID_CREDENTIALS", 401)
 
 class AccountInactiveError(AppException):
-    def __init__(self):
-        super().__init__("Account is inactive or pending verification", "ACCOUNT_INACTIVE", 403)
+    def __init__(self, message: str = "Account is inactive or pending verification"):
+        super().__init__(message, "ACCOUNT_INACTIVE", 403)
 
 class TokenExpiredError(AppException):
     def __init__(self):

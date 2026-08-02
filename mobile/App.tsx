@@ -5,7 +5,7 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { LandingScreen, LoginScreen, RegisterScreen } from './src/screens/auth';
 import { ResidentDashboard } from './src/screens/resident';
 import { GuardDashboard } from './src/screens/guard';
-import { AdminDashboard } from './src/screens/admin';
+import { AdminDashboard, SuperAdminScreen } from './src/screens/admin';
 import { StatusBar } from 'expo-status-bar';
 
 const Stack = createNativeStackNavigator();
@@ -25,9 +25,10 @@ function MainNavigator() {
         </>
       ) : (
         <>
+          {user.role === 'super_admin' && <Stack.Screen name="SuperAdmin" component={SuperAdminScreen} />}
+          {(user.role === 'admin' || user.role === 'society_admin') && <Stack.Screen name="Admin" component={AdminDashboard} />}
           {user.role === 'resident' && <Stack.Screen name="Resident" component={ResidentDashboard} />}
           {user.role === 'guard' && <Stack.Screen name="Guard" component={GuardDashboard} />}
-          {user.role === 'admin' && <Stack.Screen name="Admin" component={AdminDashboard} />}
         </>
       )}
     </Stack.Navigator>
@@ -36,24 +37,29 @@ function MainNavigator() {
 
 import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
-  }),
+    shouldShowBanner: true,
+    shouldShowList: true,
+  } as any),
 });
 
 const prefix = Linking.createURL('/');
 
 export default function App() {
   return (
-    <AuthProvider>
-      <NavigationContainer>
-        <StatusBar style="light" />
-        <MainNavigator />
-      </NavigationContainer>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <NavigationContainer>
+          <StatusBar style="dark" />
+          <MainNavigator />
+        </NavigationContainer>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

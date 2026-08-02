@@ -1,13 +1,45 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, Alert, ScrollView, BackHandler, PanResponder, Dimensions, ActivityIndicator, TouchableOpacity, Animated } from 'react-native';
-import { T, Card, Btn, PageLayout, StatCard, EmptyState, LoadingScreen, Tabs, Avatar, Badge, Input, Select, Modal } from '../../components/UI';
+import { View, Text, Alert, ScrollView, BackHandler, PanResponder, Dimensions, ActivityIndicator, TouchableOpacity, Animated, RefreshControl } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { T, Card, Btn, StatCard, EmptyState, LoadingScreen, Tabs, Avatar, Badge, Input, Select, Modal, SocietySwitcher } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
 import { UserService, FlatUserService, GuardService, FlatService, MaintenanceService } from '../../services';
+export { SuperAdminScreen } from './SuperAdminScreen';
+
+const { width } = Dimensions.get('window');
+
+const Warm = {
+  bg: '#F4F0EA',
+  headerBg: '#EBE5DC',
+  headerBorder: '#DDD6CC',
+  cardBg: '#FFFFFF',
+  cardBorder: '#E5DFD7',
+  cardSubtle: '#F8F6F2',
+  text: '#1E293B',
+  textMuted: '#64748B',
+  textDim: '#94A3B8',
+  accent: '#0284C7',
+  accentDim: '#E0F2FE',
+  green: '#10B981',
+  greenDim: '#DCFCE7',
+  amber: '#F59E0B',
+  amberDim: '#FEF3C7',
+  red: '#EF4444',
+  redDim: '#FEE2E2',
+  shadow: {
+    shadowColor: '#4A3E3D',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+};
 
 export function AdminDashboard({ navigation }: any) {
-  const { user, logout } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { user, logout, activeSociety, activeSocietyId } = useAuth();
   const [currentTab, setCurrentTab] = useState('dashboard');
-  const tabOrder = ['dashboard', 'maintenance', 'profile'];
+  const tabOrder = ['dashboard', 'residents', 'maintenance', 'guards', 'profile'];
   const currentTabRef = useRef(currentTab);
   currentTabRef.current = currentTab;
 
@@ -23,8 +55,6 @@ export function AdminDashboard({ navigation }: any) {
     },
   }), []);
 
-  const scrollRef = useRef<ScrollView>(null);
-  const [scrollY, setScrollY] = useState(0);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const prevTabRef = useRef(currentTab);
 
@@ -32,13 +62,12 @@ export function AdminDashboard({ navigation }: any) {
     const prevIdx = tabOrder.indexOf(prevTabRef.current);
     const newIdx = tabOrder.indexOf(currentTab);
     if (prevIdx !== newIdx) {
-      const screenWidth = Dimensions.get('window').width;
-      const startVal = newIdx > prevIdx ? screenWidth * 0.25 : -screenWidth * 0.25;
+      const startVal = newIdx > prevIdx ? width * 0.2 : -width * 0.2;
       slideAnim.setValue(startVal);
       Animated.spring(slideAnim, {
         toValue: 0,
-        tension: 60,
-        friction: 10,
+        tension: 65,
+        friction: 11,
         useNativeDriver: true,
       }).start();
     }
@@ -58,12 +87,10 @@ export function AdminDashboard({ navigation }: any) {
   }, [currentTab]);
 
   const [loading, setLoading] = useState(true);
-
   const [flats, setFlats] = useState<any[]>([]);
   const [guards, setGuards] = useState<any[]>([]);
   const [pendingResidents, setPendingResidents] = useState<any[]>([]);
   const [activeResidents, setActiveResidents] = useState<any[]>([]);
-  
   const [pendingPayments, setPendingPayments] = useState<any[]>([]);
   const [maintenanceFlats, setMaintenanceFlats] = useState<any[]>([]);
   
@@ -74,7 +101,7 @@ export function AdminDashboard({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   
-  const [modal, setModal] = useState<string|null>(null);
+  const [modal, setModal] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
 
   const isLoadingRef = useRef(false);
@@ -88,8 +115,8 @@ export function AdminDashboard({ navigation }: any) {
       const newItems = res.data?.data?.items || [];
       if (append) {
         setMaintenanceFlats(prev => {
-          const existingIds = new Set(prev.map(item => item.id));
-          const uniqueNew = newItems.filter(item => !existingIds.has(item.id));
+          const existingIds = new Set(prev.map((item: any) => item.id));
+          const uniqueNew = newItems.filter((item: any) => !existingIds.has(item.id));
           return [...prev, ...uniqueNew];
         });
       } else {
@@ -99,52 +126,16 @@ export function AdminDashboard({ navigation }: any) {
     } catch {}
     setLoadingMore(false);
     isLoadingRef.current = false;
-  }, []);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    setFlatPage(1);
-    await Promise.all([
-      load(),
-      loadMaintenanceFlats(1, searchQuery, false)
-    ]);
-    setRefreshing(false);
-  };
-
-  const handleScroll = (event: any) => {
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    setScrollY(contentOffset.y);
-    if (currentTab !== 'maintenance') return;
-    const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 200;
-    if (isCloseToBottom && !loadingMore && flatPage < flatTotalPages) {
-      const nextPage = flatPage + 1;
-      setFlatPage(nextPage);
-      loadMaintenanceFlats(nextPage, searchQuery, true);
-    }
-  };
-
-  const scrollToTop = () => {
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
-  };
-
-  useEffect(() => {
-    loadMaintenanceFlats(1, '', false);
-  }, [loadMaintenanceFlats]);
-
-  const onSearchChange = (v: string) => {
-    setSearchQuery(v);
-    setFlatPage(1);
-    loadMaintenanceFlats(1, v, false);
-  };
+  }, [activeSocietyId]);
 
   const load = useCallback(async () => {
     try {
       const [fr, gr, pr, ar, p_pay] = await Promise.all([
-        FlatService.getAll({ per_page: 500 }).catch(() => ({data:{data:[]}})),
-        GuardService.getAll().catch(() => ({data:{data:[]}})),
-        UserService.getAll({ role: 'resident', status: 'pending_verification' }).catch(() => ({data:{data:[]}})),
-        UserService.getAll({ role: 'resident', status: 'active' }).catch(() => ({data:{data:[]}})),
-        MaintenanceService.getPending().catch(() => ({data:{data:[]}})),
+        FlatService.getAll({ per_page: 500 }).catch(() => ({ data: { data: [] } })),
+        GuardService.getAll().catch(() => ({ data: { data: [] } })),
+        UserService.getAll({ role: 'resident', status: 'pending_verification' }).catch(() => ({ data: { data: [] } })),
+        UserService.getAll({ role: 'resident', status: 'active' }).catch(() => ({ data: { data: [] } })),
+        MaintenanceService.getPending().catch(() => ({ data: { data: [] } })),
       ]);
       setFlats(fr.data?.data?.items || fr.data?.data || []);
       setGuards(gr.data?.data?.items || gr.data?.data || []);
@@ -153,20 +144,38 @@ export function AdminDashboard({ navigation }: any) {
       setPendingPayments(p_pay.data?.data || []);
     } catch {}
     setLoading(false);
-  }, []);
+  }, [activeSocietyId]);
 
-  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [load]);
+  useEffect(() => {
+    load();
+    loadMaintenanceFlats(1, '', false);
+    const t = setInterval(load, 25000);
+    return () => clearInterval(t);
+  }, [load, loadMaintenanceFlats, activeSocietyId]);
 
-  const approveResident = async (user: any) => {
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setFlatPage(1);
+    await Promise.all([load(), loadMaintenanceFlats(1, searchQuery, false)]);
+    setRefreshing(false);
+  };
+
+  const onSearchChange = (v: string) => {
+    setSearchQuery(v);
+    setFlatPage(1);
+    loadMaintenanceFlats(1, v, false);
+  };
+
+  const approveResident = async (userToApprove: any) => {
     try {
       await FlatUserService.addPrimary({
-        user_id: user.id,
-        flat_id: user.requested_flat_id,
+        user_id: userToApprove.id,
+        flat_id: userToApprove.requested_flat_id,
         role: 'primary',
         is_owner: true,
-        move_in_date: user.move_in_date || new Date().toISOString().split('T')[0]
+        move_in_date: userToApprove.move_in_date || new Date().toISOString().split('T')[0],
       });
-      Alert.alert('Success', 'Resident approved!');
+      Alert.alert('Resident Verified', `${userToApprove.name} has been approved.`);
       load();
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.message || 'Failed to approve resident');
@@ -174,10 +183,12 @@ export function AdminDashboard({ navigation }: any) {
   };
 
   const createGuard = async () => {
-    if (!form.name || !form.phone || !form.employee_id || !form.password) return Alert.alert('Error', 'Fill required fields');
+    if (!form.name || !form.phone || !form.employee_id || !form.password) {
+      return Alert.alert('Error', 'Please fill all required guard details');
+    }
     try {
       await GuardService.create({ ...form });
-      Alert.alert('Success', 'Guard created successfully');
+      Alert.alert('Success', 'Guard account created successfully.');
       setModal(null);
       setForm({});
       load();
@@ -187,202 +198,659 @@ export function AdminDashboard({ navigation }: any) {
   };
 
   const approvePayment = async (id: string) => {
-    try { await MaintenanceService.approve(id); Alert.alert('Success', 'Payment Approved'); load(); }
-    catch (err: any) { Alert.alert('Error', 'Failed to approve'); }
+    try {
+      await MaintenanceService.approve(id);
+      Alert.alert('Payment Verified', 'Maintenance payment approved.');
+      load();
+    } catch (err: any) {
+      Alert.alert('Error', 'Failed to approve payment');
+    }
   };
 
   const rejectPayment = async (id: string) => {
-    try { await MaintenanceService.reject(id); Alert.alert('Success', 'Payment Rejected'); load(); }
-    catch (err: any) { Alert.alert('Error', 'Failed to reject'); }
+    try {
+      await MaintenanceService.reject(id);
+      Alert.alert('Payment Rejected', 'Payment entry has been marked rejected.');
+      load();
+    } catch (err: any) {
+      Alert.alert('Error', 'Failed to reject payment');
+    }
   };
 
-  if (loading) return <LoadingScreen message="Loading admin dashboard..." />;
+  if (loading) return <LoadingScreen message="Loading admin portal..." />;
 
   const renderContent = () => {
-    if (currentTab === 'dashboard') return (
-      <View>
-        <View style={{ flexDirection: 'row', marginBottom: 24 }}>
-          <StatCard label="Total Flats" value={flats.length} color={T.accent} />
-          <StatCard label="Guards" value={guards.length} color={T.green} />
-        </View>
-        <View style={{ flexDirection: 'row', marginBottom: 24 }}>
-          <StatCard label="Pending Residents" value={pendingResidents.length} color={pendingResidents.length > 0 ? T.amber : T.muted} />
-          <StatCard label="Active Residents" value={activeResidents.length} color={T.accent} />
-        </View>
-        <Card>
-          <Text style={{ color: T.text, fontSize: 16, fontWeight: '700', marginBottom: 16 }}>Quick Actions</Text>
-          <Btn variant="outline" style={{ marginBottom: 12 }} onClick={() => setCurrentTab('residents')}>Manage Residents</Btn>
-          <Btn variant="outline" style={{ marginBottom: 12 }} onClick={() => setCurrentTab('guards')}>Manage Guards</Btn>
-        </Card>
-      </View>
-    );
+    if (currentTab === 'dashboard') {
+      const totalPendingActions = pendingResidents.length + pendingPayments.length;
 
-    if (currentTab === 'residents') return (
-      <View>
-        {pendingResidents.length > 0 && (
-          <View style={{ marginBottom: 24 }}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: T.amber, marginBottom: 12 }}>⏳ PENDING APPROVALS ({pendingResidents.length})</Text>
-            {pendingResidents.map((r: any) => (
-              <Card key={r.id} style={{ borderColor: T.amber+'55' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Avatar name={r.name} color={T.amber} size={48} />
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={{ fontWeight: '700', color: T.text, fontSize: 16 }}>{r.name}</Text>
-                    <Text style={{ color: T.muted, fontSize: 13, marginTop: 4 }}>Flat {r.requested_flat?.flat_number} · {r.phone}</Text>
-                  </View>
-                  <Btn variant="green" sm onClick={() => approveResident(r)}>✓ Approve</Btn>
-                </View>
-              </Card>
-            ))}
+      return (
+        <View>
+          {/* Action Required Banner */}
+          {totalPendingActions > 0 && (
+            <View style={{
+              backgroundColor: Warm.amberDim,
+              borderColor: Warm.amber,
+              borderWidth: 1.5,
+              borderRadius: 20,
+              padding: 16,
+              marginBottom: 20,
+              ...Warm.shadow,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ fontSize: 18, marginRight: 8 }}>⚡</Text>
+                <Text style={{ fontWeight: '800', color: '#B45309', fontSize: 15 }}>
+                  {totalPendingActions} Pending Approvals Require Attention
+                </Text>
+              </View>
+              <Text style={{ color: '#92400E', fontSize: 13, marginBottom: 12 }}>
+                {pendingResidents.length} resident verifications · {pendingPayments.length} payment receipts to verify.
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {pendingResidents.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setCurrentTab('residents')}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#FFFFFF',
+                      borderColor: Warm.amber,
+                      borderWidth: 1,
+                      paddingVertical: 9,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#B45309', fontWeight: '800', fontSize: 12 }}>
+                      Review Residents ({pendingResidents.length})
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {pendingPayments.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setCurrentTab('maintenance')}
+                    style={{
+                      flex: 1,
+                      backgroundColor: Warm.green,
+                      paddingVertical: 9,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>
+                      Review Payments ({pendingPayments.length})
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* Quick Metrics */}
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+            <View style={{
+              flex: 1,
+              backgroundColor: Warm.cardBg,
+              borderColor: Warm.cardBorder,
+              borderWidth: 1,
+              borderRadius: 18,
+              padding: 16,
+              ...Warm.shadow,
+            }}>
+              <Text style={{ fontSize: 11, color: Warm.textMuted, fontWeight: '700', textTransform: 'uppercase' }}>Total Flats</Text>
+              <Text style={{ fontSize: 28, fontWeight: '800', color: Warm.accent, marginTop: 4 }}>{flats.length}</Text>
+            </View>
+            <View style={{
+              flex: 1,
+              backgroundColor: Warm.cardBg,
+              borderColor: Warm.cardBorder,
+              borderWidth: 1,
+              borderRadius: 18,
+              padding: 16,
+              ...Warm.shadow,
+            }}>
+              <Text style={{ fontSize: 11, color: Warm.textMuted, fontWeight: '700', textTransform: 'uppercase' }}>Active Guards</Text>
+              <Text style={{ fontSize: 28, fontWeight: '800', color: Warm.green, marginTop: 4 }}>{guards.length}</Text>
+            </View>
           </View>
-        )}
 
-        <Text style={{ fontSize: 13, fontWeight: '700', color: T.text, marginBottom: 12 }}>ACTIVE RESIDENTS ({activeResidents.length})</Text>
-        {activeResidents.length === 0 && <EmptyState icon="🏠" message="No active residents" />}
-        {activeResidents.map((r: any) => (
-          <Card key={r.id} style={{ marginBottom: 8 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Avatar name={r.name} size={40} color={T.accent} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={{ fontWeight: '600', color: T.text, fontSize: 15 }}>{r.name}</Text>
-                <Text style={{ color: T.muted, fontSize: 12, marginTop: 2 }}>{r.phone}</Text>
-              </View>
-              <Badge color="green" small>Active</Badge>
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+            <View style={{
+              flex: 1,
+              backgroundColor: Warm.cardBg,
+              borderColor: Warm.cardBorder,
+              borderWidth: 1,
+              borderRadius: 18,
+              padding: 16,
+              ...Warm.shadow,
+            }}>
+              <Text style={{ fontSize: 11, color: Warm.textMuted, fontWeight: '700', textTransform: 'uppercase' }}>Active Residents</Text>
+              <Text style={{ fontSize: 28, fontWeight: '800', color: Warm.text, marginTop: 4 }}>{activeResidents.length}</Text>
             </View>
-          </Card>
-        ))}
-      </View>
-    );
-
-    if (currentTab === 'guards') return (
-      <View>
-        <Btn onClick={() => { setForm({ shift: 'morning' }); setModal('add_guard'); }} style={{ marginBottom: 16 }}>+ Add New Guard</Btn>
-        {guards.length === 0 && <EmptyState icon="🛡️" message="No guards registered" />}
-        {guards.map((g: any) => (
-          <Card key={g.id}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Avatar name={g.user?.name||'G'} size={40} color={T.green} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={{ fontWeight: '700', color: T.text, fontSize: 15 }}>{g.user?.name}</Text>
-                <Text style={{ color: T.muted, fontSize: 12, marginTop: 2 }}>ID: {g.employee_id} · {g.user?.phone}</Text>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Badge color={g.shift==='morning'?'amber':'blue'} small>{g.shift} Shift</Badge>
-              </View>
+            <View style={{
+              flex: 1,
+              backgroundColor: Warm.cardBg,
+              borderColor: pendingResidents.length > 0 ? Warm.amber : Warm.cardBorder,
+              borderWidth: 1.5,
+              borderRadius: 18,
+              padding: 16,
+              ...Warm.shadow,
+            }}>
+              <Text style={{ fontSize: 11, color: Warm.textMuted, fontWeight: '700', textTransform: 'uppercase' }}>Pending Residents</Text>
+              <Text style={{ fontSize: 28, fontWeight: '800', color: pendingResidents.length > 0 ? Warm.amber : Warm.textDim, marginTop: 4 }}>
+                {pendingResidents.length}
+              </Text>
             </View>
-          </Card>
-        ))}
-      </View>
-    );
+          </View>
 
-    if (currentTab === 'maintenance') return (
-      <View>
-        {pendingPayments.length > 0 && (
-          <View style={{ marginBottom: 32 }}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: T.amber, marginBottom: 12 }}>⚡ ACTION REQUIRED ({pendingPayments.length})</Text>
-            {pendingPayments.map((p: any) => {
-              return (
-                <Card key={p.id} style={{ borderColor: T.amber+'55' }}>
+          {/* Management Shortcuts */}
+          <View style={{
+            backgroundColor: Warm.cardBg,
+            borderColor: Warm.cardBorder,
+            borderWidth: 1,
+            borderRadius: 20,
+            padding: 20,
+            ...Warm.shadow,
+          }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginBottom: 14 }}>
+              Society Management
+            </Text>
+            <TouchableOpacity
+              onPress={() => setCurrentTab('residents')}
+              style={{
+                backgroundColor: Warm.cardSubtle,
+                borderColor: Warm.cardBorder,
+                borderWidth: 1,
+                borderRadius: 14,
+                padding: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginBottom: 10,
+              }}
+            >
+              <Text style={{ fontSize: 22, marginRight: 12 }}>👥</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>Resident Verifications</Text>
+                <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 1 }}>{pendingResidents.length} pending · {activeResidents.length} verified</Text>
+              </View>
+              <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 14 }}>→</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setCurrentTab('maintenance')}
+              style={{
+                backgroundColor: Warm.cardSubtle,
+                borderColor: Warm.cardBorder,
+                borderWidth: 1,
+                borderRadius: 14,
+                padding: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginBottom: 10,
+              }}
+            >
+              <Text style={{ fontSize: 22, marginRight: 12 }}>💰</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>Maintenance & Dues</Text>
+                <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 1 }}>{pendingPayments.length} receipts awaiting review</Text>
+              </View>
+              <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 14 }}>→</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setCurrentTab('guards')}
+              style={{
+                backgroundColor: Warm.cardSubtle,
+                borderColor: Warm.cardBorder,
+                borderWidth: 1,
+                borderRadius: 14,
+                padding: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 22, marginRight: 12 }}>🛡️</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>Security Guards</Text>
+                <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 1 }}>{guards.length} registered personnel</Text>
+              </View>
+              <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 14 }}>→</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+
+    if (currentTab === 'residents') {
+      return (
+        <View>
+          {pendingResidents.length > 0 && (
+            <View style={{ marginBottom: 22 }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#B45309', marginBottom: 10, letterSpacing: 0.5 }}>
+                ⏳ PENDING REGISTRATIONS ({pendingResidents.length})
+              </Text>
+              {pendingResidents.map((r: any) => (
+                <View
+                  key={r.id}
+                  style={{
+                    backgroundColor: Warm.cardBg,
+                    borderColor: Warm.amber,
+                    borderWidth: 1.5,
+                    borderRadius: 18,
+                    padding: 16,
+                    marginBottom: 10,
+                    ...Warm.shadow,
+                  }}
+                >
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontWeight: '800', color: T.text, fontSize: 18 }}>FLAT {p.flat_number || p.flat_id}</Text>
-                      <Text style={{ color: T.muted, fontSize: 13, marginTop: 4 }}>Paid: ₹{p.amount} ({p.months_added} Months)</Text>
-                      <Text style={{ color: T.dim, fontSize: 11, marginTop: 2 }}>UTR: {p.utr_number}</Text>
+                    <Avatar name={r.name} color={Warm.amber} size={48} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 16 }}>{r.name}</Text>
+                      <Text style={{ color: Warm.accent, fontSize: 13, fontWeight: '700', marginTop: 2 }}>
+                        Flat {r.requested_flat?.flat_number} · 📞 {r.phone}
+                      </Text>
+                      {r.email && <Text style={{ color: Warm.textDim, fontSize: 11, marginTop: 1 }}>{r.email}</Text>}
                     </View>
+                    <TouchableOpacity
+                      onPress={() => approveResident(r)}
+                      style={{
+                        backgroundColor: Warm.green,
+                        borderRadius: 12,
+                        paddingHorizontal: 14,
+                        paddingVertical: 9,
+                      }}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>✓ Approve</Text>
+                    </TouchableOpacity>
                   </View>
-                  <View style={{ flexDirection: 'row', marginTop: 16, gap: 10 }}>
-                    <Btn variant="red" style={{ flex: 1 }} onClick={() => rejectPayment(p.id)}>✕ Reject</Btn>
-                    <Btn variant="green" style={{ flex: 1 }} onClick={() => approvePayment(p.id)}>✓ Approve</Btn>
-                  </View>
-                </Card>
-              );
-            })}
-          </View>
-        )}
+                </View>
+              ))}
+            </View>
+          )}
 
-        <Text style={{ fontSize: 13, fontWeight: '700', color: T.text, marginBottom: 12 }}>MASTER DIRECTORY</Text>
-        <Input placeholder="Search Flat Number..." value={searchQuery} onChange={onSearchChange} onClear={() => onSearchChange('')} icon="🔍" />
-        {maintenanceFlats.length === 0 && <EmptyState icon="🏢" message="No flats found" />}
-        {maintenanceFlats.map((f: any) => {
-          const validUntil = f.maintenance_valid_until ? new Date(f.maintenance_valid_until) : null;
-          const isExpired = !validUntil || validUntil < new Date();
-          const flatColor = f.flat_number?.endsWith('A') ? '#60a5fa' : f.flat_number?.endsWith('B') ? '#4ade80' : T.text;
-          return (
-            <Card key={f.id} style={{ marginBottom: 8, borderColor: isExpired ? T.red+'44' : T.border }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginBottom: 12 }}>
+            Active Verified Residents ({activeResidents.length})
+          </Text>
+          {activeResidents.length === 0 && (
+            <View style={{ backgroundColor: Warm.cardBg, borderRadius: 18, padding: 30, alignItems: 'center', ...Warm.shadow }}>
+              <Text style={{ fontSize: 32 }}>🏠</Text>
+              <Text style={{ color: Warm.text, fontWeight: '700', marginTop: 8 }}>No Active Residents</Text>
+            </View>
+          )}
+          {activeResidents.map((r: any) => (
+            <View
+              key={r.id}
+              style={{
+                backgroundColor: Warm.cardBg,
+                borderColor: Warm.cardBorder,
+                borderWidth: 1,
+                borderRadius: 16,
+                padding: 14,
+                marginBottom: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                ...Warm.shadow,
+              }}
+            >
+              <Avatar name={r.name} size={42} color={Warm.accent} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>{r.name}</Text>
+                <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>📞 {r.phone}</Text>
+              </View>
+              <View style={{ backgroundColor: Warm.greenDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                <Text style={{ color: Warm.green, fontSize: 11, fontWeight: '700' }}>Active</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    if (currentTab === 'maintenance') {
+      return (
+        <View>
+          {pendingPayments.length > 0 && (
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#B45309', marginBottom: 10, letterSpacing: 0.5 }}>
+                ⚡ PAYMENT PROOFS TO VERIFY ({pendingPayments.length})
+              </Text>
+              {pendingPayments.map((p: any) => (
+                <View
+                  key={p.id}
+                  style={{
+                    backgroundColor: Warm.cardBg,
+                    borderColor: Warm.amber,
+                    borderWidth: 1.5,
+                    borderRadius: 18,
+                    padding: 18,
+                    marginBottom: 12,
+                    ...Warm.shadow,
+                  }}
+                >
+                  <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 18 }}>FLAT {p.flat_number || p.flat_id}</Text>
+                  <Text style={{ color: Warm.accent, fontSize: 14, fontWeight: '700', marginTop: 2 }}>
+                    Amount: ₹{p.amount} ({p.months_added} Months Extension)
+                  </Text>
+                  <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>
+                    UTR / Reference: {p.utr_number}
+                  </Text>
+
+                  <View style={{ flexDirection: 'row', marginTop: 14, gap: 10 }}>
+                    <TouchableOpacity
+                      onPress={() => rejectPayment(p.id)}
+                      style={{
+                        flex: 1,
+                        backgroundColor: Warm.redDim,
+                        borderColor: Warm.red + '44',
+                        borderWidth: 1,
+                        borderRadius: 12,
+                        paddingVertical: 10,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ color: Warm.red, fontWeight: '700', fontSize: 13 }}>✕ Reject</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => approvePayment(p.id)}
+                      style={{
+                        flex: 1,
+                        backgroundColor: Warm.green,
+                        borderRadius: 12,
+                        paddingVertical: 10,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>✓ Approve</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginBottom: 10 }}>
+            Master Flat Directory
+          </Text>
+          <Input
+            placeholder="Search Flat Number (e.g. 101, 23B)..."
+            value={searchQuery}
+            onChange={onSearchChange}
+            onClear={() => onSearchChange('')}
+            icon="🔍"
+            returnKeyType="search"
+            autoCapitalize="characters"
+          />
+
+          {maintenanceFlats.length === 0 && (
+            <View style={{ backgroundColor: Warm.cardBg, borderRadius: 18, padding: 24, alignItems: 'center', ...Warm.shadow }}>
+              <Text style={{ fontSize: 32 }}>🏢</Text>
+              <Text style={{ color: Warm.text, fontWeight: '700', marginTop: 6 }}>No Flats Match Search</Text>
+            </View>
+          )}
+
+          {maintenanceFlats.map((f: any) => {
+            const validUntil = f.maintenance_valid_until ? new Date(f.maintenance_valid_until) : null;
+            const isExpired = !validUntil || validUntil < new Date();
+
+            return (
+              <View
+                key={f.id}
+                style={{
+                  backgroundColor: Warm.cardBg,
+                  borderColor: isExpired ? Warm.red + '44' : Warm.cardBorder,
+                  borderWidth: 1,
+                  borderRadius: 16,
+                  padding: 14,
+                  marginBottom: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  ...Warm.shadow,
+                }}
+              >
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '700', color: flatColor, fontSize: 16 }}>Flat {f.flat_number}</Text>
-                  <Text style={{ color: T.muted, fontSize: 12, marginTop: 2 }}>
-                    {validUntil ? `Valid until ${validUntil.toLocaleDateString()}` : 'No payment history'}
+                  <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 16 }}>Flat {f.flat_number}</Text>
+                  <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>
+                    {validUntil ? `Valid through ${validUntil.toLocaleDateString()}` : 'No active cycle recorded'}
                   </Text>
                 </View>
-                <Badge color={isExpired ? 'red' : 'green'} small>{isExpired ? 'Expired' : 'Active'}</Badge>
+                <View style={{ backgroundColor: isExpired ? Warm.redDim : Warm.greenDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                  <Text style={{ color: isExpired ? Warm.red : Warm.green, fontSize: 11, fontWeight: '700' }}>
+                    {isExpired ? 'EXPIRED' : 'ACTIVE'}
+                  </Text>
+                </View>
               </View>
-            </Card>
-          );
-        })}
-        
-        {loadingMore && <ActivityIndicator size="small" color={T.accent} style={{ marginVertical: 20 }} />}
-      </View>
-    );
+            );
+          })}
 
-    if (currentTab === 'profile') return (
-      <View>
-        <Card style={{ alignItems: 'center', padding: 30 }}>
-          <Avatar name={user?.name || '?'} size={80} />
-          <Text style={{ color: T.text, fontSize: 24, fontWeight: '800', marginTop: 16 }}>{user?.name}</Text>
-          <Text style={{ color: T.muted, fontSize: 16, marginTop: 4 }}>{user?.phone}</Text>
-          {user?.email && <Text style={{ color: T.dim, fontSize: 13, marginTop: 4 }}>{user?.email}</Text>}
-          {user?.role && <Badge color="blue" style={{ marginTop: 12 }}>{user?.role?.toUpperCase()}</Badge>}
-        </Card>
-        <Btn variant="red" full onClick={logout} style={{ marginTop: 24 }}>Log Out</Btn>
-      </View>
-    );
+          {loadingMore && <ActivityIndicator size="small" color={Warm.accent} style={{ marginVertical: 20 }} />}
+        </View>
+      );
+    }
+
+    if (currentTab === 'guards') {
+      return (
+        <View>
+          <TouchableOpacity
+            onPress={() => { setForm({ shift: 'morning' }); setModal('add_guard'); }}
+            style={{
+              backgroundColor: Warm.accent,
+              borderRadius: 16,
+              paddingVertical: 14,
+              alignItems: 'center',
+              marginBottom: 18,
+              shadowColor: Warm.accent,
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 15 }}>+ Register New Guard</Text>
+          </TouchableOpacity>
+
+          {guards.length === 0 && (
+            <View style={{ backgroundColor: Warm.cardBg, borderRadius: 18, padding: 30, alignItems: 'center', ...Warm.shadow }}>
+              <Text style={{ fontSize: 32 }}>🛡️</Text>
+              <Text style={{ color: Warm.text, fontWeight: '700', marginTop: 8 }}>No Guards Registered</Text>
+            </View>
+          )}
+
+          {guards.map((g: any) => (
+            <View
+              key={g.id}
+              style={{
+                backgroundColor: Warm.cardBg,
+                borderColor: Warm.cardBorder,
+                borderWidth: 1,
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                ...Warm.shadow,
+              }}
+            >
+              <Avatar name={g.user?.name || 'G'} size={42} color={Warm.green} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>{g.user?.name}</Text>
+                <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>
+                  ID: {g.employee_id} · 📞 {g.user?.phone}
+                </Text>
+              </View>
+              <View style={{ backgroundColor: g.shift === 'morning' ? Warm.amberDim : Warm.accentDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                <Text style={{ color: g.shift === 'morning' ? '#B45309' : Warm.accent, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' }}>
+                  {g.shift} Shift
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    if (currentTab === 'profile') {
+      return (
+        <View>
+          <View style={{
+            backgroundColor: Warm.cardBg,
+            borderColor: Warm.cardBorder,
+            borderWidth: 1,
+            borderRadius: 24,
+            padding: 30,
+            alignItems: 'center',
+            ...Warm.shadow,
+          }}>
+            <Avatar name={user?.name || '?'} size={80} color={Warm.accent} />
+            <Text style={{ color: Warm.text, fontSize: 24, fontWeight: '800', marginTop: 14 }}>{user?.name}</Text>
+            <Text style={{ color: Warm.textMuted, fontSize: 15, marginTop: 2 }}>{user?.phone}</Text>
+            {user?.email && <Text style={{ color: Warm.textDim, fontSize: 13, marginTop: 2 }}>{user?.email}</Text>}
+            <View style={{ backgroundColor: Warm.accentDim, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginTop: 10 }}>
+              <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 11 }}>SOCIETY ADMINISTRATOR</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            onPress={logout}
+            style={{
+              backgroundColor: Warm.redDim,
+              borderColor: Warm.red + '44',
+              borderWidth: 1,
+              borderRadius: 16,
+              paddingVertical: 14,
+              alignItems: 'center',
+              marginTop: 20,
+            }}
+          >
+            <Text style={{ color: Warm.red, fontWeight: '800', fontSize: 15 }}>Log Out of Admin Account</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
   };
 
   return (
-    <PageLayout 
-      title="Admin" 
-      subtitle="Society Management"
-      onRefresh={handleRefresh}
-      refreshing={refreshing}
-      onScroll={handleScroll}
-      scrollEventThrottle={16}
-      scrollRef={scrollRef}
-      floating={currentTab === 'maintenance' && scrollY > 300 && (
-        <TouchableOpacity
-          onPress={scrollToTop}
-          style={{
-            position: 'absolute', bottom: 30, right: 24,
-            width: 48, height: 48, borderRadius: 24,
-            backgroundColor: T.accent, alignItems: 'center', justifyContent: 'center',
-            elevation: 6, shadowColor: T.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8,
-          }}
-        >
-          <Text style={{ color: T.bg, fontSize: 20, fontWeight: '800' }}>↑</Text>
-        </TouchableOpacity>
-      )}
-    >
-      <Tabs tabs={[
-        { id: 'dashboard', label: 'Overview' },
-        { id: 'maintenance', label: 'Maintenance' },
-        { id: 'profile', label: 'Profile' },
-      ]} active={currentTab} onChange={setCurrentTab} />
+    <View style={{ flex: 1, backgroundColor: Warm.bg }}>
+      {/* ── Top Header ── */}
+      <View style={{
+        backgroundColor: Warm.headerBg,
+        paddingTop: Math.max(insets.top, 24) + 8,
+        paddingBottom: 14,
+        paddingHorizontal: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: Warm.headerBorder,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <SocietySwitcher theme="warm" />
+          <View style={{ backgroundColor: Warm.accentDim, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+            <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 11 }}>ADMIN CONSOLE</Text>
+          </View>
+        </View>
+      </View>
 
-      <Animated.View {...panResponder.panHandlers} style={{ minHeight: Dimensions.get('window').height - 200, transform: [{ translateX: slideAnim }] }}>
-        {renderContent()}
-      </Animated.View>
+      {/* ── Main Scroll View ── */}
+      <ScrollView
+        style={{ flex: 1, paddingHorizontal: 18, paddingTop: 18 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Warm.accent} />}
+      >
+        <Animated.View {...panResponder.panHandlers} style={{ minHeight: Dimensions.get('window').height - 230, transform: [{ translateX: slideAnim }], paddingBottom: 85 + Math.max(insets.bottom, 16) }}>
+          {renderContent()}
+        </Animated.View>
+      </ScrollView>
 
+      {/* ── Admin Bottom Navigation Bar ── */}
+      <View style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#FFFFFF',
+        borderTopWidth: 1,
+        borderTopColor: '#E5DFD7',
+        flexDirection: 'row',
+        paddingTop: 8,
+        paddingBottom: Math.max(insets.bottom, 16),
+        paddingHorizontal: 8,
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        shadowColor: '#4A3E3D',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 8,
+      }}>
+        {[
+          { id: 'dashboard', label: 'Overview', icon: '📊' },
+          { id: 'residents', label: 'Residents', icon: '👥' },
+          { id: 'maintenance', label: 'Dues', icon: '💰' },
+          { id: 'guards', label: 'Guards', icon: '🛡️' },
+          { id: 'profile', label: 'Profile', icon: '👤' },
+        ].map((tab) => {
+          const isAct = currentTab === tab.id;
+          return (
+            <TouchableOpacity
+              key={tab.id}
+              onPress={() => setCurrentTab(tab.id)}
+              style={{
+                alignItems: 'center',
+                paddingVertical: 5,
+                paddingHorizontal: 12,
+                borderRadius: 14,
+                backgroundColor: isAct ? Warm.bg : 'transparent',
+              }}
+            >
+              <Text style={{ fontSize: 18, opacity: isAct ? 1 : 0.55 }}>{tab.icon}</Text>
+              <Text style={{
+                color: isAct ? Warm.accent : '#94A3B8',
+                fontSize: 11,
+                fontWeight: isAct ? '800' : '600',
+                marginTop: 2,
+              }}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* ── Add Guard Modal ── */}
       {modal === 'add_guard' && (
-        <Modal title="Register Guard" onClose={() => setModal(null)}>
-          <Input label="Full Name *" placeholder="Guard Name" value={form?.name || ''} onChange={(v: string) => setForm((prev: any) => ({...(prev || {}), name: v}))} />
-          <Input label="Phone *" placeholder="Phone Number" value={form?.phone || ''} onChange={(v: string) => setForm((prev: any) => ({...(prev || {}), phone: v}))} />
-          <Input label="Employee ID *" placeholder="EMP-001" value={form?.employee_id || ''} onChange={(v: string) => setForm((prev: any) => ({...(prev || {}), employee_id: v}))} />
-          <Input label="Password *" type="password" value={form?.password || ''} onChange={(v: string) => setForm((prev: any) => ({...(prev || {}), password: v}))} />
-          <Select label="Shift" value={form?.shift || 'morning'} onChange={(v: string) => setForm((prev: any) => ({...(prev || {}), shift: v}))} options={[{value:'morning',label:'Morning'},{value:'night',label:'Night'}]} />
-          <Btn full variant="green" onClick={createGuard}>Create Guard</Btn>
+        <Modal title="Register Security Guard" subtitle="Create login credentials for guard terminal" onClose={() => setModal(null)}>
+          <Input
+            label="Guard Full Name *"
+            placeholder="e.g. Suraj Singh"
+            value={form?.name || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), name: v }))}
+          />
+          <Input
+            label="Phone Number *"
+            placeholder="98765 43210"
+            value={form?.phone || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), phone: v }))}
+          />
+          <Input
+            label="Employee ID *"
+            placeholder="e.g. SEC-001"
+            value={form?.employee_id || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), employee_id: v }))}
+          />
+          <Input
+            label="Login Password *"
+            type="password"
+            placeholder="Minimum 6 characters"
+            value={form?.password || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), password: v }))}
+          />
+          <Select
+            label="Duty Shift"
+            value={form?.shift || 'morning'}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), shift: v }))}
+            options={[
+              { value: 'morning', label: 'Morning Shift (06:00 - 18:00)' },
+              { value: 'night', label: 'Night Shift (18:00 - 06:00)' },
+            ]}
+          />
+          <Btn full variant="green" onClick={createGuard} style={{ marginTop: 12 }}>
+            Register Guard Account →
+          </Btn>
         </Modal>
       )}
-    </PageLayout>
+    </View>
   );
 }

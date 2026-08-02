@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 """
 Visitor Log Service — core business logic of the VMS.
-Handles entry, approval, exit, self check-in and overstay detection.
+Handles entry, approval, exit, self check-in and overstay detection with multi-tenancy.
 """
 
 from datetime import datetime, timedelta
@@ -13,7 +13,7 @@ from app.repositories import (
     VisitorLogRepository, VisitorRepository,
     FlatRepository, FlatUserRepository,
     GateRepository, PreApprovalRepository,
-    FrequentPassRepository
+    FrequentPassRepository, GuardRepository
 )
 from app.utils.exceptions import (
     NotFoundError, BlacklistedVisitorError,
@@ -32,8 +32,6 @@ DURATION_MINUTES = {
 }
 
 # ── Entry mode to expected exit gate ──────────────────────────────────────
-# foot and two_wheeler exit Gate 1 (same gate)
-# four_wheeler exits Gate 2 (back gate) if available
 EXIT_GATE_BY_MODE = {
     "foot":         "entry",   # exits same gate they entered
     "two_wheeler":  "entry",
@@ -45,11 +43,12 @@ class VisitorLogService:
 
     def __init__(self, db: Session):
         self.db = db
-        self.log_repo        = VisitorLogRepository(db)
-        self.visitor_repo    = VisitorRepository(db)
-        self.flat_repo       = FlatRepository(db)
-        self.flat_user_repo  = FlatUserRepository(db)
-        self.gate_repo       = GateRepository(db)
+        self.log_repo          = VisitorLogRepository(db)
+        self.visitor_repo      = VisitorRepository(db)
+        self.flat_repo         = FlatRepository(db)
+        self.flat_user_repo    = FlatUserRepository(db)
+        self.gate_repo         = GateRepository(db)
+        self.guard_repo        = GuardRepository(db)
         self.pre_approval_repo = PreApprovalRepository(db)
         self.frequent_pass_repo = FrequentPassRepository(db)
 
@@ -66,9 +65,13 @@ class VisitorLogService:
         image_data = base64.b64decode(base64_str)
         
         # Connect to Supabase S3
+        endpoint = os.getenv('SUPABASE_S3_ENDPOINT')
+        if not endpoint:
+            return None
+
         s3 = boto3.client(
             's3',
-            endpoint_url=os.getenv('SUPABASE_S3_ENDPOINT'),
+            endpoint_url=endpoint,
             aws_access_key_id=os.getenv('SUPABASE_S3_ACCESS_KEY'),
             aws_secret_access_key=os.getenv('SUPABASE_S3_SECRET_KEY'),
             region_name=os.getenv('SUPABASE_S3_REGION', 'ap-south-1'),
@@ -87,7 +90,7 @@ class VisitorLogService:
             )
             
             # Construct the public URL
-            project_ref = os.getenv('SUPABASE_S3_ENDPOINT').split('.')[0].replace('https://', '')
+            project_ref = endpoint.split('.')[0].replace('https://', '')
             public_url = f"https://{project_ref}.supabase.co/storage/v1/object/public/{bucket_name}/{file_path}"
             return public_url
             
@@ -95,12 +98,12 @@ class VisitorLogService:
             logger.error(f"[S3_UPLOAD_ERROR] Failed to upload image: {e}")
             return None
 
-    def _get_or_create_visitor(self, name: str, phone: str, photo_base64: str = None) -> Visitor:
-        """Find existing visitor by phone or create a new one."""
-        visitor = self.visitor_repo.get_by_phone(phone)
+    def _get_or_create_visitor(self, name: str, phone: str, society_id: int, photo_base64: str = None) -> Visitor:
+        """Find existing visitor by phone within society or create a new one."""
+        visitor = self.visitor_repo.get_by_phone(phone, society_id=society_id)
         photo_url = self._save_image(photo_base64) if photo_base64 else None
         if not visitor:
-            visitor = Visitor(name=name, phone=phone, photo_url=photo_url)
+            visitor = Visitor(society_id=society_id, name=name, phone=phone, photo_url=photo_url)
             self.visitor_repo.save(visitor)
         else:
             if photo_url:
@@ -108,14 +111,12 @@ class VisitorLogService:
                 self.visitor_repo.save(visitor)
         return visitor
 
-    def _resolve_exit_gate(self, entry_gate_id: int, entry_mode: str) -> int:
+    def _resolve_exit_gate(self, entry_gate_id: int, entry_mode: str, society_id: int = None) -> int:
         """
-        Determine expected exit gate based on entry mode.
-        - foot/two_wheeler → same gate they entered
-        - four_wheeler → dedicated exit gate (Gate 2) if exists, else same gate
+        Determine expected exit gate based on entry mode within the society.
         """
         if EXIT_GATE_BY_MODE.get(entry_mode) == "exit":
-            exit_gates = self.gate_repo.get_exit_gates()
+            exit_gates = self.gate_repo.get_exit_gates(society_id=society_id)
             if exit_gates:
                 return exit_gates[0].id
         return entry_gate_id
@@ -141,31 +142,34 @@ class VisitorLogService:
         if errors:
             raise ValidationError(errors)
 
-        # Check blacklist
-        if self.visitor_repo.is_blacklisted(data["visitor_phone"]):
-            visitor = self.visitor_repo.get_by_phone(data["visitor_phone"])
-            raise BlacklistedVisitorError(reason=visitor.blacklist_reason)
-
         # Check flat exists
         flat = self.flat_repo.get_by_id(data["flat_id"])
         if not flat:
             raise NotFoundError("Flat")
+
+        society_id = flat.society_id
+
+        # Check blacklist within society
+        if self.visitor_repo.is_blacklisted(data["visitor_phone"], society_id=society_id):
+            visitor = self.visitor_repo.get_by_phone(data["visitor_phone"], society_id=society_id)
+            raise BlacklistedVisitorError(reason=visitor.blacklist_reason)
 
         # Get primary resident of flat
         flat_user = self.flat_user_repo.get_primary_by_flat(data["flat_id"])
         if not flat_user:
             raise NotFoundError("Resident for this flat")
 
-        # Get or create visitor
+        # Get or create visitor in society
         visitor = self._get_or_create_visitor(
-            data["visitor_name"], data["visitor_phone"], data.get("photo_base64")
+            data["visitor_name"], data["visitor_phone"], society_id, data.get("photo_base64")
         )
 
-        # Resolve exit gate
-        exit_gate_id = self._resolve_exit_gate(data["entry_gate_id"], data["entry_mode"])
+        # Resolve exit gate in society
+        exit_gate_id = self._resolve_exit_gate(data["entry_gate_id"], data["entry_mode"], society_id=society_id)
 
         # Create log
         log = VisitorLog(
+            society_id            = society_id,
             visitor_id            = visitor.id,
             flat_id               = flat.id,
             flat_user_id          = flat_user.id,
@@ -182,9 +186,9 @@ class VisitorLogService:
         )
 
         self.log_repo.save(log)
-        logger.info(f"[VISITOR_LOG] Created by guard {guard_id} — visitor: {visitor.phone} → flat: {flat.flat_number}")
+        logger.info(f"[VISITOR_LOG] Created by guard {guard_id} — visitor: {visitor.phone} → flat: {flat.flat_number} (Society: {society_id})")
 
-        # Notify resident (imported here to avoid circular imports)
+        # Notify resident
         from app.services.notification_service import NotificationService
         NotificationService(self.db).notify_approval_request(log)
 
@@ -205,39 +209,42 @@ class VisitorLogService:
         if errors:
             raise ValidationError(errors)
 
-        # Check blacklist
-        if self.visitor_repo.is_blacklisted(data["visitor_phone"]):
-            visitor = self.visitor_repo.get_by_phone(data["visitor_phone"])
-            raise BlacklistedVisitorError(reason=visitor.blacklist_reason)
-
         flat = self.flat_repo.get_by_id(data["flat_id"])
         if not flat:
             raise NotFoundError("Flat")
+
+        society_id = flat.society_id
+
+        # Check blacklist in society
+        if self.visitor_repo.is_blacklisted(data["visitor_phone"], society_id=society_id):
+            visitor = self.visitor_repo.get_by_phone(data["visitor_phone"], society_id=society_id)
+            raise BlacklistedVisitorError(reason=visitor.blacklist_reason)
 
         flat_user = self.flat_user_repo.get_primary_by_flat(data["flat_id"])
         if not flat_user:
             raise NotFoundError("Resident for this flat")
 
         visitor = self._get_or_create_visitor(
-            data["visitor_name"], data["visitor_phone"], data.get("photo_base64")
+            data["visitor_name"], data["visitor_phone"], society_id, data.get("photo_base64")
         )
 
-        # Self check-in always enters from Gate 1 (entry gate)
-        entry_gates = self.gate_repo.get_entry_gates()
+        # Self check-in enters from society's entry gate
+        entry_gates = self.gate_repo.get_entry_gates(society_id=society_id)
         if not entry_gates:
-            raise NotFoundError("Entry gate")
+            raise NotFoundError("Entry gate for this society")
 
         entry_gate_id = entry_gates[0].id
-        exit_gate_id  = self._resolve_exit_gate(entry_gate_id, data["entry_mode"])
+        exit_gate_id  = self._resolve_exit_gate(entry_gate_id, data["entry_mode"], society_id=society_id)
 
         log = VisitorLog(
+            society_id            = society_id,
             visitor_id            = visitor.id,
             flat_id               = flat.id,
             flat_user_id          = flat_user.id,
             entry_gate_id         = entry_gate_id,
             entry_mode            = data["entry_mode"],
             vehicle_number        = data.get("vehicle_number"),
-            registered_by_guard   = None,  # self check-in
+            registered_by_guard   = None,
             approval_source       = "self_checkin",
             approval_status       = "pending",
             purpose               = data["purpose"],
@@ -247,7 +254,7 @@ class VisitorLogService:
         )
 
         self.log_repo.save(log)
-        logger.info(f"[VISITOR_LOG] Self check-in — visitor: {visitor.phone} → flat: {flat.flat_number}")
+        logger.info(f"[VISITOR_LOG] Self check-in — visitor: {visitor.phone} → flat: {flat.flat_number} (Society: {society_id})")
 
         from app.services.notification_service import NotificationService
         NotificationService(self.db).notify_approval_request(log)
@@ -263,7 +270,6 @@ class VisitorLogService:
         if log.approval_status != "pending":
             raise InvalidStatusTransitionError(log.approval_status, "approved")
 
-        # Verify the approver belongs to this flat
         flat_user = self.flat_user_repo.get_by_id(flat_user_id)
         if not flat_user or flat_user.flat_id != log.flat_id:
             raise ForbiddenError("You can only approve visitors for your own flat")
@@ -311,11 +317,6 @@ class VisitorLogService:
         return log
 
     def confirm_entry(self, log_id: int, guard_id: int, data: dict = None) -> VisitorLog:
-        """
-        Guard physically confirms the visitor has entered.
-        This is the final step — sets entered_at and status = inside.
-        Guard can also add/update vehicle number and entry mode here.
-        """
         log = self.log_repo.get_by_id(log_id)
         if not log:
             raise NotFoundError("Visitor log")
@@ -329,13 +330,12 @@ class VisitorLogService:
         log.expected_exit_by = self._calculate_expected_exit(now, log.stay_duration)
         log.status           = "inside"
 
-        # Guard can update vehicle info at entry time
         if data:
             if data.get("vehicle_number"):
                 log.vehicle_number = data["vehicle_number"]
             if data.get("entry_mode"):
                 log.entry_mode = data["entry_mode"]
-                log.expected_exit_gate_id = self._resolve_exit_gate(log.entry_gate_id, log.entry_mode)
+                log.expected_exit_gate_id = self._resolve_exit_gate(log.entry_gate_id, log.entry_mode, society_id=log.society_id)
 
         self.log_repo.save(log)
         logger.info(f"[VISITOR_LOG] Entry confirmed for log {log_id} by guard {guard_id}")
@@ -343,10 +343,6 @@ class VisitorLogService:
         return log
 
     def confirm_exit(self, log_id: int, confirmed_by: str, gate_id: int = None) -> VisitorLog:
-        """
-        Mark a visitor as exited.
-        confirmed_by: "guard" | "resident" | "system"
-        """
         log = self.log_repo.get_by_id(log_id)
         if not log:
             raise NotFoundError("Visitor log")
@@ -356,10 +352,10 @@ class VisitorLogService:
 
         now = datetime.utcnow()
 
-        log.actual_exit_at    = now
+        log.actual_exit_at      = now
         log.actual_exit_gate_id = gate_id or log.expected_exit_gate_id
-        log.exit_confirmed_by = confirmed_by
-        log.status            = "exited" if confirmed_by == "guard" else "unconfirmed_exit"
+        log.exit_confirmed_by   = confirmed_by
+        log.status              = "exited" if confirmed_by == "guard" else "unconfirmed_exit"
 
         self.log_repo.save(log)
         logger.info(f"[VISITOR_LOG] Exit confirmed for log {log_id} — by: {confirmed_by}")
@@ -367,7 +363,6 @@ class VisitorLogService:
         return log
 
     def confirm_departure_by_resident(self, log_id: int, flat_user_id: int) -> VisitorLog:
-        """Resident confirms their guest has left — even without gate scan."""
         log = self.log_repo.get_by_id(log_id)
         if not log:
             raise NotFoundError("Visitor log")
@@ -381,14 +376,14 @@ class VisitorLogService:
     def get_pending_for_flat(self, flat_id: int):
         return self.log_repo.get_pending_for_flat(flat_id)
 
-    def get_inside(self):
-        return self.log_repo.get_inside()
+    def get_inside(self, society_id: int = None):
+        return self.log_repo.get_inside(society_id)
 
     def get_inside_for_gate(self, gate_id: int):
         return self.log_repo.get_inside_for_gate(gate_id)
 
-    def get_overdue(self):
-        return self.log_repo.get_overdue()
+    def get_overdue(self, society_id: int = None):
+        return self.log_repo.get_overdue(society_id)
 
     def get_by_flat(self, flat_id: int, page: int = 1, per_page: int = 20):
         return self.log_repo.get_by_flat(flat_id, page, per_page)
@@ -396,14 +391,11 @@ class VisitorLogService:
     def get_today_for_gate(self, gate_id: int):
         return self.log_repo.get_today_for_gate(gate_id)
 
-    def get_all_filtered(self, filters: dict, page: int = 1, per_page: int = 20):
-        return self.log_repo.get_all_filtered(filters, page, per_page)
+    def get_all_filtered(self, filters: dict, page: int = 1, per_page: int = 20, society_id: int = None):
+        return self.log_repo.get_all_filtered(filters, page, per_page, society_id=society_id)
 
     def mark_overdue(self):
-        """
-        Background job — called every 15 minutes.
-        Marks inside visitors as overdue if expected_exit_by has passed.
-        """
+        """Background job — called every 15 minutes."""
         overdue_logs = self.log_repo.get_overdue()
         count = 0
         for log in overdue_logs:

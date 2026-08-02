@@ -15,7 +15,9 @@ const api = axios.create({
 
 api.interceptors.request.use(async (config) => {
   const token = await AsyncStorage.getItem('access_token');
+  const activeSocietyId = await AsyncStorage.getItem('active_society_id');
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (activeSocietyId) config.headers['X-Society-ID'] = activeSocietyId;
   return config;
 }, (err) => Promise.reject(err));
 

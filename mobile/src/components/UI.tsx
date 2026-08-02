@@ -1,15 +1,24 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, Modal as RNModal, RefreshControl } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Picker } from '@react-native-picker/picker';
 
 export const T = {
-  bg: '#080C14', surface: '#111827', surface2: '#162032',
-  border: '#1e2d45',
-  accent: '#00D4FF', accentDim: '#00d4ff18',
-  green: '#00E5A0', greenDim: '#00e5a018',
-  amber: '#FFB020', amberDim: '#ffb02018',
-  red: '#FF4D6A', redDim: '#ff4d6a18',
-  text: '#E8EDF5', muted: '#6B7A99', dim: '#3D4E6B',
+  bg: '#F4F0EA',
+  surface: '#FFFFFF',
+  surface2: '#EBE5DC',
+  border: '#E2DCD4',
+  accent: '#0284C7',
+  accentDim: '#E0F2FE',
+  green: '#10B981',
+  greenDim: '#DCFCE7',
+  amber: '#F59E0B',
+  amberDim: '#FEF3C7',
+  red: '#EF4444',
+  redDim: '#FEE2E2',
+  text: '#1E293B',
+  muted: '#64748B',
+  dim: '#94A3B8',
 };
 
 export const Card = ({ children, style, onClick }: any) => {
@@ -50,13 +59,140 @@ export const Btn = ({ children, onClick, variant='primary', sm, full, disabled, 
   );
 };
 
-export const Input = ({ label, type='text', placeholder, value, onChange, icon, required, secureTextEntry, onClear }: any) => {
+export const Input = ({
+  label,
+  type = 'text',
+  placeholder,
+  value,
+  onChange,
+  icon,
+  required,
+  secureTextEntry,
+  onClear,
+  keyboardType,
+  autoCapitalize,
+  autoCorrect,
+  maxLength,
+  returnKeyType,
+  onSubmitEditing,
+  textContentType,
+  autoComplete,
+  style,
+  inputStyle,
+}: any) => {
+  const lowerLabel = (label || '').toLowerCase();
+  const lowerPlaceholder = (placeholder || '').toLowerCase();
+  const isSecure = secureTextEntry || type === 'password';
+
+  let resolvedKeyboardType = keyboardType;
+  let resolvedAutoCapitalize = autoCapitalize;
+  let resolvedAutoCorrect = autoCorrect;
+  let resolvedTextContentType = textContentType;
+  let resolvedAutoComplete = autoComplete;
+
+  if (!resolvedKeyboardType) {
+    if (
+      type === 'phone' ||
+      type === 'tel' ||
+      lowerLabel.includes('phone') ||
+      lowerLabel.includes('mobile') ||
+      lowerPlaceholder.includes('98765') ||
+      lowerPlaceholder.includes('phone') ||
+      icon === '📞'
+    ) {
+      resolvedKeyboardType = 'phone-pad';
+      if (resolvedAutoCapitalize === undefined) resolvedAutoCapitalize = 'none';
+      if (resolvedAutoCorrect === undefined) resolvedAutoCorrect = false;
+      if (!resolvedTextContentType) resolvedTextContentType = 'telephoneNumber';
+      if (!resolvedAutoComplete) resolvedAutoComplete = 'tel';
+    } else if (
+      type === 'number' ||
+      type === 'numeric' ||
+      type === 'pin' ||
+      type === 'otp' ||
+      lowerLabel.includes('passcode') ||
+      lowerLabel.includes('pin') ||
+      lowerLabel.includes('amount') ||
+      lowerLabel.includes('rent') ||
+      lowerLabel.includes('utr') ||
+      lowerLabel.includes('reference') ||
+      lowerLabel.includes('months') ||
+      lowerLabel.includes('count') ||
+      lowerLabel.includes('flats') ||
+      lowerPlaceholder.includes('amount') ||
+      lowerPlaceholder.includes('6-digit') ||
+      lowerPlaceholder.includes('e.g. 123456') ||
+      lowerPlaceholder.includes('329182371928')
+    ) {
+      resolvedKeyboardType = 'number-pad';
+      if (resolvedAutoCapitalize === undefined) resolvedAutoCapitalize = 'none';
+      if (resolvedAutoCorrect === undefined) resolvedAutoCorrect = false;
+    } else if (
+      type === 'email' ||
+      lowerLabel.includes('email') ||
+      lowerPlaceholder.includes('@') ||
+      lowerPlaceholder.includes('email') ||
+      icon === '✉️'
+    ) {
+      resolvedKeyboardType = 'email-address';
+      if (resolvedAutoCapitalize === undefined) resolvedAutoCapitalize = 'none';
+      if (resolvedAutoCorrect === undefined) resolvedAutoCorrect = false;
+      if (!resolvedTextContentType) resolvedTextContentType = 'emailAddress';
+      if (!resolvedAutoComplete) resolvedAutoComplete = 'email';
+    } else if (isSecure) {
+      resolvedKeyboardType = 'default';
+      if (resolvedAutoCapitalize === undefined) resolvedAutoCapitalize = 'none';
+      if (resolvedAutoCorrect === undefined) resolvedAutoCorrect = false;
+      if (!resolvedTextContentType) resolvedTextContentType = 'password';
+      if (!resolvedAutoComplete) resolvedAutoComplete = 'password';
+    } else if (
+      lowerLabel.includes('name') ||
+      lowerPlaceholder.includes('name') ||
+      icon === '👤'
+    ) {
+      resolvedKeyboardType = 'default';
+      if (resolvedAutoCapitalize === undefined) resolvedAutoCapitalize = 'words';
+      if (!resolvedTextContentType) resolvedTextContentType = 'name';
+      if (!resolvedAutoComplete) resolvedAutoComplete = 'name';
+    } else if (
+      type === 'search' ||
+      lowerLabel.includes('search') ||
+      lowerPlaceholder.includes('search') ||
+      icon === '🔍'
+    ) {
+      resolvedKeyboardType = 'default';
+      if (resolvedAutoCapitalize === undefined) resolvedAutoCapitalize = 'none';
+    } else {
+      resolvedKeyboardType = 'default';
+      if (resolvedAutoCapitalize === undefined) resolvedAutoCapitalize = 'sentences';
+    }
+  }
+
   return (
-    <View style={{ marginBottom: 12 }}>
-      {label && <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>{label} {required && <Text style={{color: T.red}}>*</Text>}</Text>}
+    <View style={[{ marginBottom: 12 }, style]}>
+      {label && (
+        <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>
+          {label} {required && <Text style={{ color: T.red }}>*</Text>}
+        </Text>
+      )}
       <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14 }}>
         {icon && <Text style={{ fontSize: 16, marginRight: 10, opacity: 0.6 }}>{icon}</Text>}
-        <TextInput style={{ flex: 1, color: T.text, fontSize: 15, paddingVertical: 12 }} placeholder={placeholder} placeholderTextColor={T.dim} value={value} onChangeText={onChange} secureTextEntry={secureTextEntry || type === 'password'} />
+        <TextInput
+          style={[{ flex: 1, color: T.text, fontSize: 15, paddingVertical: 12 }, inputStyle]}
+          placeholder={placeholder}
+          placeholderTextColor={T.dim}
+          value={value}
+          onChangeText={onChange}
+          secureTextEntry={isSecure}
+          keyboardType={resolvedKeyboardType}
+          autoCapitalize={resolvedAutoCapitalize}
+          autoCorrect={resolvedAutoCorrect}
+          maxLength={maxLength}
+          returnKeyType={returnKeyType}
+          onSubmitEditing={onSubmitEditing}
+          textContentType={resolvedTextContentType}
+          autoComplete={resolvedAutoComplete}
+        />
         {onClear && value ? (
           <TouchableOpacity onPress={onClear} style={{ padding: 4, marginLeft: 6 }}>
             <Text style={{ color: T.muted, fontSize: 16, fontWeight: '700' }}>✕</Text>
@@ -79,16 +215,26 @@ export const Select = ({ label, value, onChange, options, placeholder, required 
   </View>
 );
 
-export const Textarea = ({ label, value, onChange, placeholder, required }: any) => (
+export const Textarea = ({ label, value, onChange, placeholder, required, keyboardType = 'default', autoCapitalize = 'sentences' }: any) => (
   <View style={{ marginBottom: 12 }}>
     {label && <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>{label} {required && <Text style={{color: T.red}}>*</Text>}</Text>}
-    <TextInput style={{ backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, padding: 14, color: T.text, fontSize: 15, height: 100, textAlignVertical: 'top' }} multiline placeholder={placeholder} placeholderTextColor={T.dim} value={value} onChangeText={onChange} />
+    <TextInput
+      style={{ backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, padding: 14, color: T.text, fontSize: 15, height: 100, textAlignVertical: 'top' }}
+      multiline
+      placeholder={placeholder}
+      placeholderTextColor={T.dim}
+      value={value}
+      onChangeText={onChange}
+      keyboardType={keyboardType}
+      autoCapitalize={autoCapitalize}
+    />
   </View>
 );
 
 export const PageLayout = ({ children, title, subtitle, action, scroll=true, onRefresh, refreshing=false, onScroll, scrollEventThrottle=16, scrollRef, floating }: any) => {
+  const insets = useSafeAreaInsets();
   const content = (
-    <View style={{ padding: 24, paddingBottom: 100 }}>
+    <View style={{ paddingHorizontal: 22, paddingTop: Math.max(insets.top, 24) + 12, paddingBottom: 60 + Math.max(insets.bottom, 16) }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 28, fontWeight: '800', color: T.text, marginBottom: 4 }}>{title}</Text>
@@ -286,3 +432,168 @@ export const Calendar = ({ value, onChange }: any) => {
   );
 };
 
+export const SocietyBadge = ({ name = 'RM2 Residency', style }: any) => (
+  <View style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: T.surface2, borderColor: T.border, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, alignSelf: 'flex-start' }, style]}>
+    <Text style={{ fontSize: 13, marginRight: 6 }}>🏢</Text>
+    <Text style={{ color: T.accent, fontSize: 12, fontWeight: '700' }}>{name}</Text>
+  </View>
+);
+
+export const SocietySwitcher = ({ style, theme = 'dark', flatNumber }: any) => {
+  const { activeSociety, societies, switchSociety, user } = require('../context/AuthContext').useAuth();
+  const [modalVisible, setModalVisible] = useState(false);
+  const [switching, setSwitching] = useState(false);
+
+  const isWarm = theme === 'warm';
+
+  const handleSelect = async (id: number) => {
+    setSwitching(true);
+    try {
+      await switchSociety(id);
+      setModalVisible(false);
+    } catch {}
+    setSwitching(false);
+  };
+
+  const displayName = flatNumber 
+    ? `${activeSociety?.name || 'RM2'} ${flatNumber}`
+    : (activeSociety?.name || 'Select Society');
+
+  return (
+    <>
+      <TouchableOpacity
+        onPress={() => setModalVisible(true)}
+        style={[{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: isWarm ? '#FFFFFF' : T.surface2,
+          borderColor: isWarm ? '#DDD6CC' : T.accent + '55',
+          borderWidth: 1,
+          borderRadius: 22,
+          paddingHorizontal: 12,
+          paddingVertical: 7,
+          alignSelf: 'flex-start',
+          shadowColor: isWarm ? '#4A3E3D' : '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: isWarm ? 0.08 : 0.2,
+          shadowRadius: 3,
+          elevation: isWarm ? 2 : 1,
+        }, style]}
+      >
+        <View style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          backgroundColor: '#0284C7',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginRight: 8,
+        }}>
+          <Text style={{ fontSize: 11 }}>🏢</Text>
+        </View>
+        <View>
+          <Text style={{ color: isWarm ? '#1E293B' : T.text, fontSize: 13, fontWeight: '800' }}>
+            {displayName} <Text style={{ color: isWarm ? '#64748B' : T.accent, fontSize: 11 }}>▾</Text>
+          </Text>
+        </View>
+      </TouchableOpacity>
+
+      <RNModal transparent visible={modalVisible} animationType="fade" onRequestClose={() => setModalVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: '#00000088', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: isWarm ? '#FFFFFF' : T.surface, borderRadius: 20, padding: 24, maxHeight: '80%', borderWidth: 1, borderColor: isWarm ? '#E5DFD7' : T.border }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <View>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: isWarm ? '#1E293B' : T.text }}>Switch Society</Text>
+                <Text style={{ fontSize: 12, color: isWarm ? '#64748B' : T.muted, marginTop: 2 }}>Select a community to manage or view</Text>
+              </View>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={{ padding: 4 }}>
+                <Text style={{ color: isWarm ? '#64748B' : T.muted, fontSize: 22 }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView>
+              {societies.map((s: any) => {
+                const isSelected = s.id === activeSociety?.id;
+                return (
+                  <TouchableOpacity
+                    key={s.id}
+                    disabled={switching}
+                    onPress={() => handleSelect(s.id)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: isSelected ? (isWarm ? '#E0F2FE' : T.accentDim) : (isWarm ? '#F8F6F2' : T.surface2),
+                      borderColor: isSelected ? '#0284C7' : (isWarm ? '#E5DFD7' : T.border),
+                      borderWidth: 1,
+                      borderRadius: 14,
+                      padding: 14,
+                      marginBottom: 10
+                    }}
+                  >
+                    <Text style={{ fontSize: 24, marginRight: 12 }}>🏢</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: isSelected ? '#0284C7' : (isWarm ? '#1E293B' : T.text), fontWeight: '800', fontSize: 15 }}>
+                        {s.name}
+                      </Text>
+                      <Text style={{ color: isWarm ? '#64748B' : T.muted, fontSize: 12, marginTop: 2 }}>
+                        {s.city ? `${s.city} · ` : ''}{s.total_flats} Flats
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <Badge color="blue" small>Active</Badge>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </RNModal>
+    </>
+  );
+};
+
+export const QuickActionTile = ({ icon, label, sub, color = '#0284C7', onClick, theme = 'dark' }: any) => {
+  const isWarm = theme === 'warm';
+  return (
+    <TouchableOpacity
+      activeOpacity={0.75}
+      onPress={onClick}
+      style={{
+        flex: 1,
+        backgroundColor: isWarm ? '#FFFFFF' : T.surface,
+        borderColor: isWarm ? '#E2DCD4' : T.border,
+        borderWidth: 1,
+        borderRadius: 18,
+        paddingVertical: 18,
+        paddingHorizontal: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 104,
+        shadowColor: isWarm ? '#4A3E3D' : '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: isWarm ? 0.07 : 0.2,
+        shadowRadius: 5,
+        elevation: isWarm ? 3 : 2,
+      }}
+    >
+      <View style={{
+        width: 46,
+        height: 46,
+        borderRadius: 14,
+        backgroundColor: color + '18',
+        borderColor: color + '33',
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 8,
+      }}>
+        <Text style={{ fontSize: 24 }}>{icon}</Text>
+      </View>
+      <Text style={{ color: isWarm ? '#1E293B' : T.text, fontSize: 13, fontWeight: '800', textAlign: 'center' }} numberOfLines={1}>
+        {label}
+      </Text>
+      {sub && <Text style={{ color: isWarm ? '#64748B' : T.dim, fontSize: 10, marginTop: 2, textAlign: 'center' }} numberOfLines={1}>{sub}</Text>}
+    </TouchableOpacity>
+  );
+};

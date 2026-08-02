@@ -1,13 +1,87 @@
 """
 Database models for RM2 VMS.
-All 15 tables defined using SQLAlchemy ORM.
+All tables defined using SQLAlchemy ORM with multi-tenancy support via societies.
 Each model has a to_dict() method for clean serialisation.
 """
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Enum, DateTime, Boolean, Date, Time, Text, ForeignKey, Numeric
+from sqlalchemy import (
+    Column, Integer, String, Enum, DateTime, Boolean,
+    Date, Time, Text, ForeignKey, Numeric, UniqueConstraint
+)
 from sqlalchemy.orm import relationship
 from app.database import Base
+
+
+# ── 0. Societies (Tenants) ──────────────────────────────────────────────────
+
+class Society(Base):
+    __tablename__ = "societies"
+
+    id          = Column(Integer, primary_key=True)
+    name        = Column(String(150), nullable=False)
+    slug        = Column(String(100), unique=True, nullable=False, index=True)
+    address     = Column(Text, nullable=True)
+    city        = Column(String(100), nullable=True)
+    total_flats = Column(Integer, nullable=True)
+    logo_url    = Column(String(500), nullable=True)
+    status      = Column(Enum("trial", "active", "suspended", name="society_status"), default="active", nullable=False)
+    created_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    flats                = relationship("Flat", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    gates                = relationship("Gate", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    guards               = relationship("Guard", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    visitors             = relationship("Visitor", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    visitor_logs         = relationship("VisitorLog", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    pre_approvals        = relationship("PreApproval", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    frequent_passes      = relationship("FrequentPass", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    gate_sessions        = relationship("GateSession", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    panic_alerts         = relationship("PanicAlert", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    maintenance_bills    = relationship("MaintenanceBill", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    maintenance_payments = relationship("MaintenancePayment", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    announcements        = relationship("Announcement", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    notifications        = relationship("Notification", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    flat_users           = relationship("FlatUser", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    society_admins       = relationship("SocietyAdmin", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+
+    def to_dict(self):
+        return {
+            "id":          self.id,
+            "name":        self.name,
+            "slug":        self.slug,
+            "address":     self.address,
+            "city":        self.city,
+            "total_flats": self.total_flats,
+            "logo_url":    self.logo_url,
+            "status":      self.status,
+            "created_at":  self.created_at.isoformat(),
+        }
+
+
+class SocietyAdmin(Base):
+    __tablename__ = "society_admins"
+
+    id         = Column(Integer, primary_key=True)
+    society_id = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False)
+    user_id    = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("society_id", "user_id", name="uq_society_admin"),
+    )
+
+    society = relationship("Society", back_populates="society_admins")
+    user    = relationship("User", back_populates="society_admins")
+
+    def to_dict(self):
+        return {
+            "id":         self.id,
+            "society_id": self.society_id,
+            "user_id":    self.user_id,
+            "created_at": self.created_at.isoformat(),
+            "society":    self.society.to_dict() if self.society else None,
+        }
 
 
 # ── 1. Gates ───────────────────────────────────────────────────────────────
@@ -16,12 +90,18 @@ class Gate(Base):
     __tablename__ = "gates"
 
     id         = Column(Integer, primary_key=True)
+    society_id = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     name       = Column(String(100), nullable=False)
     type       = Column(Enum("entry_only", "exit_only", "both", name="gate_type"), nullable=False)
     status     = Column(Enum("active", "inactive", name="gate_status"), default="active", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    __table_args__ = (
+        UniqueConstraint("society_id", "name", name="uq_gate_society_name"),
+    )
+
     # Relationships
+    society        = relationship("Society", back_populates="gates")
     gate_sessions  = relationship("GateSession",  back_populates="gate", lazy="dynamic")
     visitor_logs   = relationship("VisitorLog",   foreign_keys="VisitorLog.entry_gate_id", back_populates="entry_gate", lazy="dynamic")
     panic_alerts   = relationship("PanicAlert",   back_populates="gate", lazy="dynamic")
@@ -29,6 +109,7 @@ class Gate(Base):
     def to_dict(self):
         return {
             "id":         self.id,
+            "society_id": self.society_id,
             "name":       self.name,
             "type":       self.type,
             "status":     self.status,
@@ -42,20 +123,27 @@ class Flat(Base):
     __tablename__ = "flats"
 
     id          = Column(Integer, primary_key=True)
-    flat_number = Column(String(20), nullable=False, unique=True)
+    society_id  = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
+    flat_number = Column(String(20), nullable=False)
     status      = Column(Enum("occupied", "vacant", name="flat_status"), default="vacant", nullable=False)
     maintenance_valid_until = Column(Date, nullable=True)
 
+    __table_args__ = (
+        UniqueConstraint("society_id", "flat_number", name="uq_flat_society_number"),
+    )
+
     # Relationships
-    flat_users         = relationship("FlatUser",         back_populates="flat",  lazy="dynamic")
-    visitor_logs       = relationship("VisitorLog",       back_populates="flat",  lazy="dynamic")
-    maintenance_bills  = relationship("MaintenanceBill",  back_populates="flat",  lazy="dynamic")
+    society              = relationship("Society", back_populates="flats")
+    flat_users           = relationship("FlatUser",         back_populates="flat",  lazy="dynamic")
+    visitor_logs         = relationship("VisitorLog",       back_populates="flat",  lazy="dynamic")
+    maintenance_bills    = relationship("MaintenanceBill",  back_populates="flat",  lazy="dynamic")
     maintenance_payments = relationship("MaintenancePayment", back_populates="flat", lazy="dynamic")
-    panic_alerts       = relationship("PanicAlert",       back_populates="flat",  lazy="dynamic")
+    panic_alerts         = relationship("PanicAlert",       back_populates="flat",  lazy="dynamic")
 
     def to_dict(self):
         return {
             "id":          self.id,
+            "society_id":  self.society_id,
             "flat_number": self.flat_number,
             "status":      self.status,
             "maintenance_valid_until": self.maintenance_valid_until.isoformat() if self.maintenance_valid_until else None,
@@ -67,20 +155,22 @@ class Flat(Base):
 class User(Base):
     __tablename__ = "users"
 
-    id            = Column(Integer, primary_key=True)
-    name          = Column(String(150), nullable=False)
-    phone         = Column(String(20), unique=True, nullable=False)
-    email         = Column(String(150), unique=True, nullable=True)
-    password_hash = Column(String(255), nullable=False)
-    role          = Column(Enum("resident", "guard", "admin", name="user_role"), nullable=False)
-    status        = Column(Enum("active", "inactive", "pending_verification", name="user_status"), default="pending_verification", nullable=False)
+    id             = Column(Integer, primary_key=True)
+    name           = Column(String(150), nullable=False)
+    phone          = Column(String(20), unique=True, nullable=False)
+    email          = Column(String(150), unique=True, nullable=True)
+    password_hash  = Column(String(255), nullable=False)
+    role           = Column(Enum("resident", "guard", "admin", "super_admin", name="user_role"), nullable=False)
+    status         = Column(Enum("active", "inactive", "pending_verification", name="user_status"), default="pending_verification", nullable=False)
+    is_super_admin = Column(Boolean, default=False, nullable=False)
     requested_flat_id = Column(Integer, ForeignKey("flats.id"), nullable=True)
-    expo_push_token = Column(String(255), nullable=True)
-    move_in_date  = Column(Date, nullable=True)
-    created_at    = Column(DateTime, default=datetime.utcnow, nullable=False)
-    last_login    = Column(DateTime, nullable=True)
+    expo_push_token   = Column(String(255), nullable=True)
+    move_in_date   = Column(Date, nullable=True)
+    created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_login     = Column(DateTime, nullable=True)
 
     # Relationships
+    society_admins       = relationship("SocietyAdmin",       back_populates="user",    lazy="dynamic")
     flat_user            = relationship("FlatUser",           back_populates="user",    uselist=False)
     guard                = relationship("Guard",              back_populates="user",    uselist=False)
     requested_flat       = relationship("Flat",               foreign_keys=[requested_flat_id])
@@ -92,18 +182,47 @@ class User(Base):
     announcements        = relationship("Announcement",       back_populates="created_by_user", lazy="dynamic")
 
     def to_dict(self, include_sensitive=False):
+        societies_info = []
+        if self.flat_user and self.flat_user.society:
+            societies_info.append({
+                "society_id": self.flat_user.society_id,
+                "society_name": self.flat_user.society.name,
+                "society_slug": self.flat_user.society.slug,
+                "role": "resident",
+                "flat_id": self.flat_user.flat_id,
+                "flat_number": self.flat_user.flat.flat_number if self.flat_user.flat else None,
+            })
+        if self.guard and self.guard.society:
+            societies_info.append({
+                "society_id": self.guard.society_id,
+                "society_name": self.guard.society.name,
+                "society_slug": self.guard.society.slug,
+                "role": "guard",
+                "employee_id": self.guard.employee_id,
+            })
+        for sa in self.society_admins:
+            if sa.society:
+                societies_info.append({
+                    "society_id": sa.society_id,
+                    "society_name": sa.society.name,
+                    "society_slug": sa.society.slug,
+                    "role": "admin",
+                })
+
         data = {
-            "id":         self.id,
-            "name":       self.name,
-            "phone":      self.phone,
-            "email":      self.email,
-            "role":       self.role,
-            "status":     self.status,
+            "id":             self.id,
+            "name":           self.name,
+            "phone":          self.phone,
+            "email":          self.email,
+            "role":           self.role,
+            "status":         self.status,
+            "is_super_admin": self.is_super_admin,
             "requested_flat_id": self.requested_flat_id,
             "requested_flat": self.requested_flat.to_dict() if self.requested_flat else None,
-            "move_in_date": self.move_in_date.isoformat() if self.move_in_date else None,
-            "created_at": self.created_at.isoformat(),
-            "last_login": self.last_login.isoformat() if self.last_login else None,
+            "move_in_date":   self.move_in_date.isoformat() if self.move_in_date else None,
+            "created_at":     self.created_at.isoformat(),
+            "last_login":     self.last_login.isoformat() if self.last_login else None,
+            "societies":      societies_info,
         }
         return data
 
@@ -114,6 +233,7 @@ class FlatUser(Base):
     __tablename__ = "flat_users"
 
     id            = Column(Integer, primary_key=True)
+    society_id    = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     user_id       = Column(Integer, ForeignKey("users.id"), nullable=False)
     flat_id       = Column(Integer, ForeignKey("flats.id"), nullable=False)
     role          = Column(Enum("primary", "spouse", "parent", "child", "sibling", name="flat_user_role"), nullable=False)
@@ -123,7 +243,12 @@ class FlatUser(Base):
     move_out_date = Column(Date, nullable=True)
     created_at    = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    __table_args__ = (
+        UniqueConstraint("society_id", "user_id", "flat_id", name="uq_flat_user_society"),
+    )
+
     # Relationships
+    society        = relationship("Society",        back_populates="flat_users")
     user           = relationship("User",           back_populates="flat_user")
     flat           = relationship("Flat",           back_populates="flat_users")
     visitor_logs   = relationship("VisitorLog",     foreign_keys="VisitorLog.flat_user_id", back_populates="flat_user", lazy="dynamic")
@@ -134,6 +259,7 @@ class FlatUser(Base):
     def to_dict(self):
         return {
             "id":            self.id,
+            "society_id":    self.society_id,
             "user_id":       self.user_id,
             "flat_id":       self.flat_id,
             "role":          self.role,
@@ -153,11 +279,17 @@ class Guard(Base):
     __tablename__ = "guards"
 
     id          = Column(Integer, primary_key=True)
+    society_id  = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     user_id     = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
-    employee_id = Column(String(50), unique=True, nullable=False)
+    employee_id = Column(String(50), nullable=False)
     shift       = Column(Enum("morning", "night", name="guard_shift"), nullable=False)
 
+    __table_args__ = (
+        UniqueConstraint("society_id", "employee_id", name="uq_guard_society_employee"),
+    )
+
     # Relationships
+    society       = relationship("Society",      back_populates="guards")
     user          = relationship("User",         back_populates="guard")
     gate_sessions = relationship("GateSession",  back_populates="guard", lazy="dynamic")
     visitor_logs  = relationship("VisitorLog",   back_populates="registered_by_guard_rel", lazy="dynamic")
@@ -165,6 +297,7 @@ class Guard(Base):
     def to_dict(self):
         return {
             "id":          self.id,
+            "society_id":  self.society_id,
             "user_id":     self.user_id,
             "employee_id": self.employee_id,
             "shift":       self.shift,
@@ -178,6 +311,7 @@ class Visitor(Base):
     __tablename__ = "visitors"
 
     id               = Column(Integer, primary_key=True)
+    society_id       = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     name             = Column(String(150), nullable=False)
     phone            = Column(String(20), nullable=False)
     photo_url        = Column(String(500), nullable=True)
@@ -186,7 +320,12 @@ class Visitor(Base):
     blacklist_reason = Column(Text, nullable=True)
     created_at       = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    __table_args__ = (
+        UniqueConstraint("society_id", "phone", name="uq_visitor_society_phone"),
+    )
+
     # Relationships
+    society         = relationship("Society", back_populates="visitors")
     visitor_logs    = relationship("VisitorLog",    back_populates="visitor", lazy="dynamic")
     frequent_passes = relationship("FrequentPass",  back_populates="visitor", lazy="dynamic")
     ratings         = relationship("VisitorRating", secondary="visitor_logs",
@@ -197,6 +336,7 @@ class Visitor(Base):
     def to_dict(self):
         return {
             "id":               self.id,
+            "society_id":       self.society_id,
             "name":             self.name,
             "phone":            self.phone,
             "photo_url":        self.photo_url,
@@ -213,6 +353,7 @@ class VisitorLog(Base):
     __tablename__ = "visitor_logs"
 
     id                    = Column(Integer, primary_key=True)
+    society_id            = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     visitor_id            = Column(Integer, ForeignKey("visitors.id"),   nullable=False)
     flat_id               = Column(Integer, ForeignKey("flats.id"),      nullable=False)
     flat_user_id          = Column(Integer, ForeignKey("flat_users.id"), nullable=False)
@@ -250,6 +391,7 @@ class VisitorLog(Base):
     created_at            = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
+    society                    = relationship("Society",   back_populates="visitor_logs")
     visitor                    = relationship("Visitor",   back_populates="visitor_logs")
     flat                       = relationship("Flat",      back_populates="visitor_logs")
     flat_user                  = relationship("FlatUser",  foreign_keys=[flat_user_id], back_populates="visitor_logs")
@@ -264,6 +406,7 @@ class VisitorLog(Base):
     def to_dict(self):
         return {
             "id":                    self.id,
+            "society_id":            self.society_id,
             "visitor_id":            self.visitor_id,
             "flat_id":               self.flat_id,
             "flat_user_id":          self.flat_user_id,
@@ -297,6 +440,7 @@ class PreApproval(Base):
     __tablename__ = "pre_approvals"
 
     id              = Column(Integer, primary_key=True)
+    society_id      = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     flat_user_id    = Column(Integer, ForeignKey("flat_users.id"), nullable=False)
     visitor_name    = Column(String(150), nullable=False)
     visitor_phone   = Column(String(20), nullable=False)
@@ -310,11 +454,13 @@ class PreApproval(Base):
     created_at      = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
+    society   = relationship("Society",  back_populates="pre_approvals")
     flat_user = relationship("FlatUser", back_populates="pre_approvals")
 
     def to_dict(self):
         return {
             "id":              self.id,
+            "society_id":      self.society_id,
             "flat_user_id":    self.flat_user_id,
             "visitor_name":    self.visitor_name,
             "visitor_phone":   self.visitor_phone,
@@ -335,6 +481,7 @@ class FrequentPass(Base):
     __tablename__ = "frequent_passes"
 
     id            = Column(Integer, primary_key=True)
+    society_id    = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     flat_user_id  = Column(Integer, ForeignKey("flat_users.id"), nullable=False)
     visitor_id    = Column(Integer, ForeignKey("visitors.id"),   nullable=False)
     name          = Column(String(150), nullable=False)
@@ -347,12 +494,14 @@ class FrequentPass(Base):
     created_at    = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
+    society   = relationship("Society",  back_populates="frequent_passes")
     flat_user = relationship("FlatUser", back_populates="frequent_passes")
     visitor   = relationship("Visitor",  back_populates="frequent_passes")
 
     def to_dict(self):
         return {
             "id":            self.id,
+            "society_id":    self.society_id,
             "flat_user_id":  self.flat_user_id,
             "visitor_id":    self.visitor_id,
             "name":          self.name,
@@ -400,6 +549,7 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id              = Column(Integer, primary_key=True)
+    society_id      = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=True)
     user_id         = Column(Integer, ForeignKey("users.id"),        nullable=False)
     visitor_log_id  = Column(Integer, ForeignKey("visitor_logs.id"), nullable=True)
     type            = Column(Enum(
@@ -414,12 +564,14 @@ class Notification(Base):
     sent_at         = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
+    society     = relationship("Society",     back_populates="notifications")
     user        = relationship("User",        back_populates="notifications")
     visitor_log = relationship("VisitorLog",  back_populates="notifications")
 
     def to_dict(self):
         return {
             "id":             self.id,
+            "society_id":     self.society_id,
             "user_id":        self.user_id,
             "visitor_log_id": self.visitor_log_id,
             "type":           self.type,
@@ -436,18 +588,21 @@ class GateSession(Base):
     __tablename__ = "gate_sessions"
 
     id          = Column(Integer, primary_key=True)
+    society_id  = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     guard_id    = Column(Integer, ForeignKey("guards.id"), nullable=False)
     gate_id     = Column(Integer, ForeignKey("gates.id"),  nullable=False)
     shift_start = Column(DateTime, default=datetime.utcnow, nullable=False)
     shift_end   = Column(DateTime, nullable=True)
 
     # Relationships
-    guard = relationship("Guard", back_populates="gate_sessions")
-    gate  = relationship("Gate",  back_populates="gate_sessions")
+    society = relationship("Society", back_populates="gate_sessions")
+    guard   = relationship("Guard", back_populates="gate_sessions")
+    gate    = relationship("Gate",  back_populates="gate_sessions")
 
     def to_dict(self):
         return {
             "id":          self.id,
+            "society_id":  self.society_id,
             "guard_id":    self.guard_id,
             "gate_id":     self.gate_id,
             "shift_start": self.shift_start.isoformat(),
@@ -463,6 +618,7 @@ class PanicAlert(Base):
     __tablename__ = "panic_alerts"
 
     id           = Column(Integer, primary_key=True)
+    society_id   = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     triggered_by = Column(Integer, ForeignKey("users.id"),  nullable=False)
     role         = Column(Enum("guard", "resident", name="panic_role"), nullable=False)
     gate_id      = Column(Integer, ForeignKey("gates.id"),  nullable=True)
@@ -474,6 +630,7 @@ class PanicAlert(Base):
     created_at   = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
+    society           = relationship("Society", back_populates="panic_alerts")
     triggered_by_user = relationship("User", foreign_keys=[triggered_by], back_populates="panic_alerts_triggered")
     resolved_by_user  = relationship("User", foreign_keys=[resolved_by],  back_populates="panic_alerts_resolved")
     gate              = relationship("Gate", back_populates="panic_alerts")
@@ -482,6 +639,7 @@ class PanicAlert(Base):
     def to_dict(self):
         return {
             "id":           self.id,
+            "society_id":   self.society_id,
             "triggered_by": self.triggered_by,
             "role":         self.role,
             "gate_id":      self.gate_id,
@@ -500,6 +658,7 @@ class MaintenanceBill(Base):
     __tablename__ = "maintenance_bills"
 
     id              = Column(Integer, primary_key=True)
+    society_id      = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     flat_id         = Column(Integer, ForeignKey("flats.id"), nullable=False)
     bill_period     = Column(String(20), nullable=False)
     schedule        = Column(Enum("monthly", "quarterly", "half_yearly", "yearly", name="bill_schedule"), nullable=False)
@@ -514,13 +673,19 @@ class MaintenanceBill(Base):
     receipt_url     = Column(String(500), nullable=True)
     generated_at    = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    __table_args__ = (
+        UniqueConstraint("society_id", "flat_id", "bill_period", name="uq_bill_society_flat_period"),
+    )
+
     # Relationships
+    society      = relationship("Society", back_populates="maintenance_bills")
     flat         = relationship("Flat", back_populates="maintenance_bills")
     paid_by_user = relationship("User", foreign_keys=[paid_by], back_populates="maintenance_payments")
 
     def to_dict(self):
         return {
             "id":              self.id,
+            "society_id":      self.society_id,
             "flat_id":         self.flat_id,
             "bill_period":     self.bill_period,
             "schedule":        self.schedule,
@@ -536,10 +701,12 @@ class MaintenanceBill(Base):
             "generated_at":    self.generated_at.isoformat(),
         }
 
+
 class MaintenancePayment(Base):
     __tablename__ = "maintenance_payments"
 
     id              = Column(Integer, primary_key=True)
+    society_id      = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     flat_id         = Column(Integer, ForeignKey("flats.id"), nullable=False)
     paid_by         = Column(Integer, ForeignKey("users.id"), nullable=False)
     amount          = Column(Numeric(10, 2), nullable=False)
@@ -550,12 +717,14 @@ class MaintenancePayment(Base):
     processed_at    = Column(DateTime, nullable=True)
 
     # Relationships
+    society      = relationship("Society", back_populates="maintenance_payments")
     flat         = relationship("Flat", back_populates="maintenance_payments")
     paid_by_user = relationship("User", foreign_keys=[paid_by])
 
     def to_dict(self):
         return {
             "id":              self.id,
+            "society_id":      self.society_id,
             "flat_id":         self.flat_id,
             "flat_number":     self.flat.flat_number if self.flat else None,
             "paid_by":         self.paid_by,
@@ -574,6 +743,7 @@ class Announcement(Base):
     __tablename__ = "announcements"
 
     id             = Column(Integer, primary_key=True)
+    society_id     = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     created_by     = Column(Integer, ForeignKey("users.id"), nullable=False)
     title          = Column(String(255), nullable=False)
     body           = Column(Text, nullable=False)
@@ -583,11 +753,13 @@ class Announcement(Base):
     expires_at     = Column(DateTime, nullable=True)
 
     # Relationships
+    society         = relationship("Society", back_populates="announcements")
     created_by_user = relationship("User", back_populates="announcements")
 
     def to_dict(self):
         return {
             "id":             self.id,
+            "society_id":     self.society_id,
             "created_by":     self.created_by,
             "title":          self.title,
             "body":           self.body,

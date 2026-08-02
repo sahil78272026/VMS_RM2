@@ -3,9 +3,24 @@ import api from './api';
 export const AuthService = {
   register: (d: any) => api.post('/auth/register', d),
   login: (d: any) => api.post('/auth/login', d),
+  googleLogin: (d: any) => api.post('/auth/google', d),
   logout: () => api.post('/auth/logout'),
   refresh: () => api.post('/auth/refresh'),
   changePassword: (d: any) => api.post('/auth/change-password', d),
+  getMySocieties: () => api.get('/auth/my-societies'),
+  switchSociety: (society_id: number) => api.post('/auth/switch-society', { society_id }),
+};
+
+export const SocietyService = {
+  getAll: (p?: any) => api.get('/societies', { params: p }),
+  getById: (id: number | string) => api.get(`/societies/${id}`),
+  create: (d: any) => api.post('/societies', d),
+  update: (id: number | string, d: any) => api.put(`/societies/${id}`, d),
+  getStats: (id: number | string) => api.get(`/societies/${id}/stats`),
+  batchCreateFlats: (id: number | string, d: any) => api.post(`/societies/${id}/batch-flats`, d),
+  getAdmins: (id: number | string) => api.get(`/societies/${id}/admins`),
+  assignAdmin: (id: number | string, d: any) => api.post(`/societies/${id}/admins`, d),
+  removeAdmin: (society_id: number | string, user_id: number | string) => api.delete(`/societies/${society_id}/admins/${user_id}`),
 };
 
 export const FlatService = {
@@ -80,6 +95,7 @@ export const PreApprovalService = {
   update: (id: string, d: any) => api.patch(`/pre-approvals/${id}`, d),
   cancel: (id: string) => api.delete(`/pre-approvals/${id}`),
   check: (phone: string, flat_id: string) => api.get('/pre-approvals/check', { params: { phone, flat_id } }),
+  verifyPasscode: (passcode: string) => api.get(`/pre-approvals/verify/${passcode}`),
 };
 
 export const FrequentPassService = {
@@ -95,7 +111,7 @@ export const FrequentPassService = {
 export const MaintenanceService = {
   getMy: () => api.get('/maintenance/my'),
   submitPayment: (d: any) => api.post('/maintenance/submit', d),
-  getPending: () => api.get('/maintenance/admin/pending'),
+  getPending: (p?: any) => api.get('/maintenance/admin/pending', { params: p }),
   getFlats: (p?: any) => api.get('/maintenance/admin/flats', { params: p }),
   approve: (id: string) => api.post(`/maintenance/admin/approve/${id}`),
   reject: (id: string) => api.post(`/maintenance/admin/reject/${id}`),

@@ -19,22 +19,22 @@ class GuardService:
         self.repo      = GuardRepository(db)
         self.user_repo = UserRepository(db)
 
-    def get_all(self):
-        return self.repo.get_all()
+    def get_all(self, society_id: int = None):
+        return self.repo.get_all_by_society(society_id)
 
-    def get_by_id(self, guard_id):
+    def get_by_id(self, guard_id: int):
         guard = self.repo.get_by_id(guard_id)
         if not guard:
             raise NotFoundError("Guard")
         return guard
 
-    def get_by_user(self, user_id):
-        guard = self.repo.get_by_user(user_id)
+    def get_by_user(self, user_id: int, society_id: int = None):
+        guard = self.repo.get_by_user(user_id, society_id=society_id)
         if not guard:
             raise NotFoundError("Guard profile")
         return guard
 
-    def create(self, data):
+    def create(self, data: dict):
         errors = {}
         if not data.get("name"):        errors["name"]        = "Required"
         if not data.get("phone"):       errors["phone"]       = "Required"
@@ -43,50 +43,57 @@ class GuardService:
         if errors:
             raise ValidationError(errors)
 
-        if self.user_repo.phone_exists(data["phone"]):
-            raise DuplicateEntryError("Phone already registered", field="phone")
+        society_id = data.get("society_id", 1)
 
-        if self.repo.employee_id_exists(data["employee_id"]):
-            raise DuplicateEntryError("Employee ID already exists", field="employee_id")
+        if self.repo.employee_id_exists(data["employee_id"], society_id=society_id):
+            raise DuplicateEntryError(f"Employee ID '{data['employee_id']}' already exists in this society", field="employee_id")
 
-        # Use provided password or default to employee_id
-        raw_password = data.get("password") or data["employee_id"]
-        password_hash = bcrypt.hashpw(
-            raw_password.encode("utf-8"), bcrypt.gensalt()
-        ).decode("utf-8")
+        # Find or create user
+        user = self.user_repo.get_by_phone(data["phone"])
+        if not user:
+            # Use provided password or default to employee_id
+            raw_password = data.get("password") or data["employee_id"]
+            password_hash = bcrypt.hashpw(
+                raw_password.encode("utf-8"), bcrypt.gensalt()
+            ).decode("utf-8")
 
-        user = User(
-            name          = data["name"].strip(),
-            phone         = data["phone"].strip(),
-            email         = data.get("email"),
-            password_hash = password_hash,
-            role          = "guard",
-            status        = "active",
-        )
-        self.user_repo.save(user)
+            user = User(
+                name          = data["name"].strip(),
+                phone         = data["phone"].strip(),
+                email         = data.get("email"),
+                password_hash = password_hash,
+                role          = "guard",
+                status        = "active",
+            )
+            self.user_repo.save(user)
+        else:
+            # If user already exists, update role if needed
+            user.status = "active"
+            self.user_repo.save(user)
 
         guard = Guard(
+            society_id  = society_id,
             user_id     = user.id,
             employee_id = data["employee_id"].strip(),
             shift       = data["shift"],
         )
         self.repo.save(guard)
-        logger.info(f"[GUARD] Created: {user.name} ({guard.employee_id})")
+        logger.info(f"[GUARD] Created: {user.name} ({guard.employee_id}) in society {society_id}")
         return guard
 
-    def update(self, guard_id, data):
+    def update(self, guard_id: int, data: dict):
         guard = self.get_by_id(guard_id)
         if data.get("shift"):
             guard.shift = data["shift"]
         if data.get("employee_id"):
-            if self.repo.employee_id_exists(data["employee_id"], exclude_id=guard_id):
-                raise DuplicateEntryError("Employee ID already exists", field="employee_id")
+            if self.repo.employee_id_exists(data["employee_id"], society_id=guard.society_id, exclude_id=guard_id):
+                raise DuplicateEntryError("Employee ID already exists in this society", field="employee_id")
             guard.employee_id = data["employee_id"]
         self.repo.save(guard)
         return guard
 
-    def deactivate(self, guard_id):
-        guard      = self.get_by_id(guard_id)
+    def deactivate(self, guard_id: int):
+        guard = self.get_by_id(guard_id)
         guard.user.status = "inactive"
         self.user_repo.save(guard.user)
         logger.info(f"[GUARD] Deactivated: {guard_id}")

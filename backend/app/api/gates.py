@@ -1,27 +1,32 @@
 """
 Gates Routes — /api/v1/gates
-Admin manages gates. All roles can view active gates.
+Admin manages gates. All roles can view active gates for their society.
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
+from typing import Optional
 from app.database import get_db
-from app.api.deps import get_current_user
-
 from app.services.gate_service import GateService
 from app.utils.response import success, error
 from app.utils.exceptions import AppException
 
 
-
 router = APIRouter(prefix="/api/v1/gates", tags=["gates"])
 
+
 @router.get("")
-async def get_all_gates(request: Request, db: Session = Depends(get_db)):
-    """All roles: list all active gates."""
+async def get_all_gates(
+    request: Request,
+    society_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """All roles: list all active gates for society."""
     try:
         gate_service = GateService(db)
-        gates = gate_service.get_all()
+        header_society_id = request.headers.get("X-Society-ID")
+        target_society_id = society_id or (int(header_society_id) if header_society_id and header_society_id.isdigit() else None)
+        gates = gate_service.get_all(society_id=target_society_id)
         return success("Gates fetched", data=[g.to_dict() for g in gates])
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)
@@ -44,10 +49,13 @@ async def get_gate(gate_id: int, request: Request, db: Session = Depends(get_db)
 
 @router.post("")
 async def create_gate(request: Request, db: Session = Depends(get_db)):
-    """Admin: add a new gate."""
+    """Admin: add a new gate to society."""
     try:
         gate_service = GateService(db)
         data = await request.json()
+        header_society_id = request.headers.get("X-Society-ID")
+        if "society_id" not in data and header_society_id and header_society_id.isdigit():
+            data["society_id"] = int(header_society_id)
         gate = gate_service.create(data)
         return success("Gate created", data=gate.to_dict(), status_code=201)
     except AppException as e:

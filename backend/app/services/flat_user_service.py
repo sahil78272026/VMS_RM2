@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 """
 Flat User Service — manages primary residents and family members.
+Includes multi-tenancy scoping via society_id.
 """
 
 import bcrypt
@@ -52,20 +53,14 @@ class FlatUserService:
         if not flat:
             raise NotFoundError("Flat")
 
-        # Check if flat already has a primary resident (we allow multiple primaries now)
-        existing = self.repo.get_primary_by_flat(flat_id)
-        # We no longer raise DuplicateEntryError here because flats can have multiple primary members
-
-        # Check user isn't already assigned to another flat
-        existing_user = self.repo.get_by_user(user_id)
-        if existing_user:
-            raise DuplicateEntryError("This user is already assigned to a flat")
+        society_id = flat.society_id
 
         from datetime import date
         if isinstance(move_in, str):
             move_in = date.fromisoformat(move_in)
             
         flat_user = FlatUser(
+            society_id   = society_id,
             user_id      = user_id,
             flat_id      = flat_id,
             role         = "primary",
@@ -83,7 +78,7 @@ class FlatUserService:
         user.status = "active"
         self.user_repo.save(user)
 
-        logger.info(f"[FLAT_USER] Primary resident added — user {user.id} → flat {flat.flat_number}")
+        logger.info(f"[FLAT_USER] Primary resident added — user {user.id} → flat {flat.flat_number} in society {society_id}")
         return flat_user
 
     def add_member(self, requesting_user_id: int, data: dict):
@@ -105,24 +100,25 @@ class FlatUserService:
             raise NotFoundError("Your flat assignment")
 
         # Check phone not taken
-        if self.user_repo.phone_exists(data["phone"]):
-            raise DuplicateEntryError("Phone number already registered", field="phone")
+        existing_user = self.user_repo.get_by_phone(data["phone"])
+        if existing_user:
+            new_user = existing_user
+        else:
+            # Create user account for family member
+            temp_password = data.get("password", data["phone"][-4:] + "@rm2")
+            password_hash = bcrypt.hashpw(
+                temp_password.encode("utf-8"), bcrypt.gensalt()
+            ).decode("utf-8")
 
-        # Create user account for family member
-        temp_password = data.get("password", data["phone"][-4:] + "@rm2")
-        password_hash = bcrypt.hashpw(
-            temp_password.encode("utf-8"), bcrypt.gensalt()
-        ).decode("utf-8")
-
-        new_user = User(
-            name          = data["name"].strip(),
-            phone         = data["phone"].strip(),
-            email         = data.get("email"),
-            password_hash = password_hash,
-            role          = "resident",
-            status        = "active",
-        )
-        self.user_repo.save(new_user)
+            new_user = User(
+                name          = data["name"].strip(),
+                phone         = data["phone"].strip(),
+                email         = data.get("email"),
+                password_hash = password_hash,
+                role          = "resident",
+                status        = "active",
+            )
+            self.user_repo.save(new_user)
 
         from datetime import date
         move_in = data["move_in_date"]
@@ -130,6 +126,7 @@ class FlatUserService:
             move_in = date.fromisoformat(move_in)
 
         flat_user = FlatUser(
+            society_id   = requester.society_id,
             user_id      = new_user.id,
             flat_id      = requester.flat_id,
             role         = data["relation"],  # spouse, parent, child, sibling
@@ -139,7 +136,7 @@ class FlatUserService:
         )
         self.repo.save(flat_user)
 
-        logger.info(f"[FLAT_USER] Family member added — {new_user.name} → flat {requester.flat_id}")
+        logger.info(f"[FLAT_USER] Family member added — {new_user.name} → flat {requester.flat_id} in society {requester.society_id}")
         return flat_user
 
     def update_member(self, requesting_user_id: int, flat_user_id: int, data: dict):
@@ -231,7 +228,7 @@ class FlatUserService:
         if target.role != "primary":
             raise ValidationError({"role": "This member is not primary"})
 
-        target.role = "spouse"  # Default to spouse; frontend can change via update
+        target.role = "spouse"
         target.can_approve = False
         self.repo.save(target)
         logger.info(f"[FLAT_USER] Demoted flat_user {target_flat_user_id} from primary by user {requesting_user_id}")

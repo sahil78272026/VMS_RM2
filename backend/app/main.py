@@ -73,6 +73,7 @@ def create_app() -> FastAPI:
 
     # Include routers here
     from app.api.auth import router as auth_router
+    from app.api.societies import router as societies_router
     from app.api.announcements import router as announcements_router
     from app.api.flat_users import router as flat_users_router
     from app.api.flats import router as flats_router
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
     from app.api.sse import router as sse_router
 
     app.include_router(auth_router)
+    app.include_router(societies_router)
     app.include_router(announcements_router)
     app.include_router(flat_users_router)
     app.include_router(flats_router)
