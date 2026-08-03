@@ -236,16 +236,37 @@ export function GuardDashboard({ navigation }: any) {
               borderRadius: 18,
               marginBottom: 18,
             }}>
-              <Text style={{ color: '#B45309', fontWeight: '800', fontSize: 14, marginBottom: 8 }}>
-                ⚠️ No Active Shift Selected
+              <Text style={{ color: '#B45309', fontWeight: '800', fontSize: 15, marginBottom: 12, textAlign: 'center' }}>
+                ⚠️ Select Gate to Start Shift
               </Text>
-              <Select
-                label=""
-                placeholder="Select a gate to start your duty shift..."
-                value=""
-                onChange={startShift}
-                options={gates.map(g => ({ value: g.id, label: g.name }))}
-              />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
+                {gates.map((g: any) => (
+                  <TouchableOpacity
+                    key={g.id}
+                    onPress={() => startShift(g.id)}
+                    style={{
+                      flex: 1,
+                      minWidth: '45%',
+                      backgroundColor: '#FFFFFF',
+                      borderColor: Warm.amber,
+                      borderWidth: 1.5,
+                      borderRadius: 16,
+                      padding: 16,
+                      alignItems: 'center',
+                      ...Warm.shadow,
+                    }}
+                  >
+                    <Text style={{ fontSize: 28, marginBottom: 8 }}>{g.type === 'exit' ? '🚪' : '⛩️'}</Text>
+                    <Text style={{ color: Warm.text, fontWeight: '800', fontSize: 14, textAlign: 'center' }}>{g.name}</Text>
+                    <Text style={{ color: Warm.amber, fontWeight: '800', fontSize: 11, marginTop: 6, textTransform: 'uppercase' }}>Tap to Start</Text>
+                  </TouchableOpacity>
+                ))}
+                {gates.length === 0 && (
+                  <Text style={{ color: '#B45309', fontSize: 13, textAlign: 'center', marginVertical: 10 }}>
+                    No gates found for this society. Contact admin.
+                  </Text>
+                )}
+              </View>
             </View>
           ) : (
             <View style={{

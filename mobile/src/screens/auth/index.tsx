@@ -45,417 +45,332 @@ export function GoogleSSOButton({ onClick, loading, label = 'Continue with Googl
   );
 }
 
-// ── Landing Screen ───────────────────────────────────────────────────────────
+// ── Landing Screen (Clean & Minimal Intro) ──────────────────────────────────
 export function LandingScreen({ navigation }: any) {
-  const { loginWithGoogle } = useAuth();
-  const [activeSlide, setActiveSlide] = useState(0);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [googleModal, setGoogleModal] = useState(false);
-  const [googleEmail, setGoogleEmail] = useState('');
-  const [googleName, setGoogleName] = useState('');
-
-  const SLIDES = [
-    {
-      icon: '🛡️',
-      title: 'Smart Gate Security',
-      desc: 'Seamless 1-tap pre-approvals for guests, cabs, delivery, and home services.',
-      color: T.accent,
-    },
-    {
-      icon: '⚡',
-      title: 'Real-Time Gate Alerts',
-      desc: 'Get instant notifications with visitor photos before they enter the society.',
-      color: T.green,
-    },
-    {
-      icon: '🏢',
-      title: 'Multi-Society Access',
-      desc: 'Manage multiple apartments across different societies from a single account.',
-      color: '#A78BFA',
-    },
-  ];
-
-  const handleGoogleSignIn = async () => {
-    if (!googleEmail || !googleEmail.includes('@')) {
-      return Alert.alert('Error', 'Please enter a valid Google email address.');
-    }
-    setGoogleLoading(true);
-    try {
-      await loginWithGoogle({
-        email: googleEmail.trim(),
-        name: googleName.trim() || googleEmail.split('@')[0],
-        google_id: `g_${Date.now()}`,
-      });
-      setGoogleModal(false);
-    } catch (err: any) {
-      Alert.alert('Google Sign-In Failed', err.response?.data?.message || 'Unable to authenticate with Google');
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
   return (
-    <View style={{ flex: 1, backgroundColor: T.bg, justifyContent: 'space-between', paddingVertical: 40, paddingHorizontal: 24 }}>
-      {/* Top Branding */}
-      <View style={{ alignItems: 'center', marginTop: 10 }}>
+    <View style={{ flex: 1, backgroundColor: T.bg, justifyContent: 'space-between', paddingVertical: 48, paddingHorizontal: 24 }}>
+      {/* Brand Hero */}
+      <View style={{ alignItems: 'center', marginTop: 30 }}>
         <View style={{
-          width: 68,
-          height: 68,
-          borderRadius: 20,
-          backgroundColor: T.surface2,
-          borderColor: T.accent + '44',
+          width: 76,
+          height: 76,
+          borderRadius: 24,
+          backgroundColor: T.surface,
+          borderColor: T.accent + '33',
           borderWidth: 1.5,
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: 12,
-          shadowColor: T.accent,
+          marginBottom: 16,
+          shadowColor: '#000',
           shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.25,
+          shadowOpacity: 0.08,
           shadowRadius: 10,
         }}>
-          <Text style={{ fontSize: 34 }}>🏢</Text>
+          <Text style={{ fontSize: 38 }}>🏢</Text>
         </View>
-        <Text style={{ fontSize: 30, fontWeight: '800', color: T.text, letterSpacing: -0.5 }}>
+        <Text style={{ fontSize: 32, fontWeight: '800', color: T.text, letterSpacing: -0.5 }}>
           RM2 <Text style={{ color: T.accent }}>Secure</Text>
         </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-          <Badge color="blue" small>COMMUNITY GATEWAY</Badge>
-        </View>
+        <Text style={{ fontSize: 14, color: T.muted, marginTop: 6, fontWeight: '500' }}>
+          Smart Community & Gate Management
+        </Text>
       </View>
 
-      {/* Feature Carousel Cards */}
-      <View style={{ marginVertical: 14 }}>
-        <Card style={{
-          padding: 22,
-          alignItems: 'center',
-          borderColor: SLIDES[activeSlide].color + '44',
-          backgroundColor: T.surface,
-          borderRadius: 20,
-          borderWidth: 1.5,
-        }}>
-          <View style={{
-            width: 56,
-            height: 56,
-            borderRadius: 28,
-            backgroundColor: SLIDES[activeSlide].color + '18',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 14,
-          }}>
-            <Text style={{ fontSize: 28 }}>{SLIDES[activeSlide].icon}</Text>
+      {/* Value Proposition Highlight */}
+      <View style={{
+        backgroundColor: T.surface,
+        borderColor: T.border,
+        borderWidth: 1,
+        borderRadius: 20,
+        padding: 20,
+        gap: 14,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Text style={{ fontSize: 20 }}>🛡️</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontWeight: '700', color: T.text, fontSize: 14 }}>Seamless Gate Approvals</Text>
+            <Text style={{ color: T.muted, fontSize: 12 }}>1-tap pass for guests, cabs & deliveries</Text>
           </View>
-          <Text style={{ fontSize: 19, fontWeight: '800', color: T.text, marginBottom: 6, textAlign: 'center' }}>
-            {SLIDES[activeSlide].title}
-          </Text>
-          <Text style={{ fontSize: 13, color: T.muted, textAlign: 'center', lineHeight: 18 }}>
-            {SLIDES[activeSlide].desc}
-          </Text>
-        </Card>
-
-        {/* Carousel Indicators */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 14, gap: 8 }}>
-          {SLIDES.map((_, i) => (
-            <TouchableOpacity
-              key={i}
-              onPress={() => setActiveSlide(i)}
-              style={{
-                width: activeSlide === i ? 24 : 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: activeSlide === i ? T.accent : T.border,
-              }}
-            />
-          ))}
+        </View>
+        <View style={{ height: 1, backgroundColor: T.border }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Text style={{ fontSize: 20 }}>⚡</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontWeight: '700', color: T.text, fontSize: 14 }}>Instant Notifications</Text>
+            <Text style={{ color: T.muted, fontSize: 12 }}>Real-time photo alerts at arrival</Text>
+          </View>
         </View>
       </View>
 
-      {/* Action Buttons (Google SSO + Standard Login) */}
+      {/* Clean Primary Actions */}
       <View>
-        {/* Google SSO Button */}
-        <GoogleSSOButton onClick={() => setGoogleModal(true)} />
-
         <Btn
           full
-          onClick={() => navigation.navigate('Login', { role: 'resident' })}
-          style={{ marginBottom: 10, paddingVertical: 13, borderRadius: 14 }}
+          onClick={() => navigation.navigate('Login')}
+          style={{ paddingVertical: 15, borderRadius: 14 }}
         >
-          Sign In with Phone →
+          Continue with Mobile Number →
         </Btn>
-
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Register')}
-          style={{
-            backgroundColor: T.surface2,
-            borderColor: T.border,
-            borderWidth: 1,
-            borderRadius: 14,
-            paddingVertical: 12,
-            alignItems: 'center',
-            marginBottom: 16,
-          }}
-        >
-          <Text style={{ color: T.text, fontWeight: '700', fontSize: 14 }}>
-            🏢 Join Your Society / Register Flat
-          </Text>
-        </TouchableOpacity>
-
-        {/* Guard / Staff Login Link */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: T.dim, fontSize: 12 }}>Security Guard? </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Login', { role: 'guard' })}>
-            <Text style={{ color: T.accent, fontWeight: '700', fontSize: 12 }}>Guard Portal 🛡️</Text>
-          </TouchableOpacity>
-        </View>
       </View>
-
-      {/* Google SSO Prompt Modal */}
-      {googleModal && (
-        <Modal title="Google Account Sign-In" subtitle="One-tap secure resident access" onClose={() => setGoogleModal(false)}>
-          <Text style={{ color: T.muted, fontSize: 13, marginBottom: 14 }}>
-            Enter your Google email to authenticate and access your society portal instantly:
-          </Text>
-          <Input
-            label="Google Email Address *"
-            placeholder="e.g. resident@gmail.com"
-            value={googleEmail}
-            onChange={setGoogleEmail}
-            icon="✉️"
-          />
-          <Input
-            label="Full Name (Optional)"
-            placeholder="e.g. Rahul Sharma"
-            value={googleName}
-            onChange={setGoogleName}
-            icon="👤"
-          />
-          <Btn full variant="green" disabled={googleLoading} onClick={handleGoogleSignIn} style={{ marginTop: 12 }}>
-            {googleLoading ? 'Connecting...' : 'Sign In with Google Account →'}
-          </Btn>
-        </Modal>
-      )}
     </View>
   );
 }
 
-// ── Login Screen ─────────────────────────────────────────────────────────────
-export function LoginScreen({ route, navigation }: any) {
-  const initialRole = route.params?.role || 'resident';
-  const [selectedRole, setSelectedRole] = useState(initialRole);
-  const { login, loginWithGoogle } = useAuth();
+// ── Login Screen (100% OTP-Based Authentication) ────────────────────────────
+export function LoginScreen({ navigation }: any) {
+  const { sendOtp, verifyOtp } = useAuth();
+  const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [devOtp, setDevOtp] = useState<string | null>(null);
+  const [timer, setTimer] = useState(30);
 
-  const [googleModal, setGoogleModal] = useState(false);
-  const [googleEmail, setGoogleEmail] = useState('');
-  const [googleName, setGoogleName] = useState('');
-  const [googleLoading, setGoogleLoading] = useState(false);
+  // Countdown timer for OTP Resend
+  useEffect(() => {
+    let interval: any = null;
+    if (step === 'otp' && timer > 0) {
+      interval = setInterval(() => {
+        setTimer(prev => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [step, timer]);
 
-  const ROLES = [
-    { id: 'resident', label: 'Resident', icon: '🏠' },
-    { id: 'guard', label: 'Guard', icon: '🛡️' },
-    { id: 'admin', label: 'Admin', icon: '⚙️' },
-  ];
-
-  const handleSubmit = async () => {
+  const handleSendOtp = async () => {
     setErrorMsg(null);
-    if (!phone || !password) {
-      setErrorMsg('Please enter both registered phone number and password.');
+    const cleanPhone = phone.trim().replace(/\s+/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      setErrorMsg('Please enter a valid 10-digit mobile number.');
       return;
     }
     setLoading(true);
     try {
-      await login(phone, password);
+      const res = await sendOtp(cleanPhone);
+      if (res?.data?.dev_otp || res?.dev_otp) {
+        setDevOtp(res?.data?.dev_otp || res?.dev_otp);
+      }
+      setTimer(30);
+      setStep('otp');
     } catch (err: any) {
-      const serverMsg = err.response?.data?.message || err.response?.data?.error?.details || 'Invalid credentials. Please verify your phone and password.';
+      const serverMsg = err.response?.data?.message || err.response?.data?.error?.details || 'Unable to send OTP. Please try again.';
       setErrorMsg(typeof serverMsg === 'string' ? serverMsg : JSON.stringify(serverMsg));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    if (!googleEmail || !googleEmail.includes('@')) {
-      return Alert.alert('Error', 'Please enter a valid Google email address.');
+  const handleVerifyOtp = async () => {
+    setErrorMsg(null);
+    const cleanPhone = phone.trim().replace(/\s+/g, '');
+    const cleanOtp = otp.trim();
+    if (!cleanOtp || cleanOtp.length < 6) {
+      setErrorMsg('Please enter the complete 6-digit OTP code.');
+      return;
     }
-    setGoogleLoading(true);
+    setLoading(true);
     try {
-      await loginWithGoogle({
-        email: googleEmail.trim(),
-        name: googleName.trim() || googleEmail.split('@')[0],
-        google_id: `g_${Date.now()}`,
-      });
-      setGoogleModal(false);
+      const result = await verifyOtp(cleanPhone, cleanOtp);
+      if (result?.is_new_user) {
+        navigation.navigate('Register', { phone: cleanPhone });
+        return;
+      }
     } catch (err: any) {
-      Alert.alert('Google Sign-In Failed', err.response?.data?.message || 'Unable to authenticate with Google');
+      const serverMsg = err.response?.data?.message || err.response?.data?.error?.details || 'Invalid verification code. Please try again.';
+      setErrorMsg(typeof serverMsg === 'string' ? serverMsg : JSON.stringify(serverMsg));
     } finally {
-      setGoogleLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <PageLayout title="Sign In" subtitle="Access your society management portal" scroll={true}>
-      {/* Role Switcher Pill Bar */}
-      <View style={{
-        flexDirection: 'row',
-        backgroundColor: T.surface2,
-        borderRadius: 12,
-        padding: 4,
-        marginBottom: 16,
-        borderColor: T.border,
-        borderWidth: 1,
-      }}>
-        {ROLES.map((r) => {
-          const isSel = selectedRole === r.id;
-          return (
-            <TouchableOpacity
-              key={r.id}
-              onPress={() => {
-                setSelectedRole(r.id);
-                setErrorMsg(null);
-              }}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                borderRadius: 8,
-                backgroundColor: isSel ? T.accentDim : 'transparent',
-                borderColor: isSel ? T.accent + '66' : 'transparent',
-                borderWidth: isSel ? 1 : 0,
-                alignItems: 'center',
-                flexDirection: 'row',
-                justifyContent: 'center',
-                gap: 6,
-              }}
-            >
-              <Text style={{ fontSize: 14 }}>{r.icon}</Text>
-              <Text style={{
-                color: isSel ? T.accent : T.muted,
-                fontWeight: isSel ? '700' : '500',
-                fontSize: 13,
-              }}>
-                {r.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+    <PageLayout
+      title={step === 'otp' ? 'Enter OTP' : 'Sign In'}
+      subtitle={step === 'otp' ? `Verification code sent to +91 ${phone}` : 'Enter your mobile number to continue'}
+      scroll={true}
+    >
+      {/* Branding Header */}
+      <View style={{ alignItems: 'center', marginBottom: 20, marginTop: 6 }}>
+        <View style={{
+          width: 58,
+          height: 58,
+          borderRadius: 18,
+          backgroundColor: T.surface,
+          borderColor: T.accent + '33',
+          borderWidth: 1.5,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 10,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.06,
+          shadowRadius: 6,
+        }}>
+          <Text style={{ fontSize: 28 }}>🏢</Text>
+        </View>
+        <Text style={{ fontSize: 22, fontWeight: '800', color: T.text, letterSpacing: -0.5 }}>
+          RM2 <Text style={{ color: T.accent }}>Secure</Text>
+        </Text>
       </View>
 
-      {/* Prominent Login Failure Banner in UI */}
+      {/* Error Alert Banner */}
       {errorMsg ? (
         <View style={{
-          backgroundColor: '#EF44441A',
+          backgroundColor: '#EF444414',
           borderColor: '#EF4444',
           borderWidth: 1,
-          borderRadius: 12,
+          borderRadius: 14,
           padding: 14,
           marginBottom: 16,
           flexDirection: 'row',
           alignItems: 'center',
           gap: 10,
         }}>
-          <Text style={{ fontSize: 20 }}>⚠️</Text>
+          <Text style={{ fontSize: 18 }}>⚠️</Text>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: '#F87171', fontSize: 13, fontWeight: '700' }}>
-              Authentication Issue
+            <Text style={{ color: '#DC2626', fontSize: 13, fontWeight: '700' }}>
+              Authentication Failed
             </Text>
-            <Text style={{ color: '#FCA5A5', fontSize: 12, marginTop: 2, lineHeight: 17 }}>
+            <Text style={{ color: '#B91C1C', fontSize: 12, marginTop: 2, lineHeight: 16 }}>
               {errorMsg}
             </Text>
           </View>
         </View>
       ) : null}
 
-      {/* Google SSO Option for Residents */}
-      {selectedRole === 'resident' && (
-        <View style={{ marginBottom: 8 }}>
-          <GoogleSSOButton onClick={() => setGoogleModal(true)} />
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 12 }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
-            <Text style={{ color: T.dim, fontSize: 12, paddingHorizontal: 10, fontWeight: '600' }}>
-              OR SIGN IN WITH PHONE
-            </Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: T.border }} />
-          </View>
-        </View>
-      )}
-
-      <Card>
-        <Input
-          label="Registered Phone Number"
-          placeholder="98765 43210"
-          value={phone}
-          onChange={(v: string) => {
-            setPhone(v);
-            setErrorMsg(null);
-          }}
-          icon="📞"
-        />
-        <Input
-          label="Password"
-          type="password"
-          placeholder="••••••••"
-          value={password}
-          onChange={(v: string) => {
-            setPassword(v);
-            setErrorMsg(null);
-          }}
-          icon="🔒"
-        />
-        <Btn full disabled={loading} onClick={handleSubmit} style={{ marginTop: 10, paddingVertical: 14 }}>
-          {loading ? 'Authenticating...' : 'Sign In →'}
-        </Btn>
-      </Card>
-
-      {selectedRole === 'resident' && (
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Register')}
-          style={{ marginTop: 20, alignItems: 'center' }}
-        >
-          <Text style={{ color: T.muted, fontSize: 14 }}>
-            New to society? <Text style={{ color: T.green, fontWeight: '700' }}>Register Flat Here</Text>
+      {/* ── STEP 1: ENTER PHONE NUMBER (OTP ONLY) ─────────────────────────── */}
+      {step === 'phone' && (
+        <Card style={{ padding: 20 }}>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: T.muted, marginBottom: 14 }}>
+            Enter your mobile number to receive a one-time verification code:
           </Text>
-        </TouchableOpacity>
-      )}
 
-      <TouchableOpacity
-        onPress={() => navigation.goBack()}
-        style={{ marginTop: 20, alignItems: 'center', marginBottom: 20 }}
-      >
-        <Text style={{ color: T.dim, fontSize: 13 }}>← Back to Welcome</Text>
-      </TouchableOpacity>
+          <Input
+            label="Mobile Number"
+            placeholder="e.g. 98765 43210"
+            value={phone}
+            onChange={(v: string) => {
+              setPhone(v);
+              setErrorMsg(null);
+            }}
+            icon="📞"
+            keyboardType="phone-pad"
+            maxLength={13}
+          />
 
-      {/* Google SSO Prompt Modal */}
-      {googleModal && (
-        <Modal title="Google Account Sign-In" subtitle="One-tap secure resident access" onClose={() => setGoogleModal(false)}>
-          <Text style={{ color: T.muted, fontSize: 13, marginBottom: 14 }}>
-            Enter your Google email to authenticate and access your society portal instantly:
-          </Text>
-          <Input
-            label="Google Email Address *"
-            placeholder="e.g. resident@gmail.com"
-            value={googleEmail}
-            onChange={setGoogleEmail}
-            icon="✉️"
-          />
-          <Input
-            label="Full Name (Optional)"
-            placeholder="e.g. Rahul Sharma"
-            value={googleName}
-            onChange={setGoogleName}
-            icon="👤"
-          />
-          <Btn full variant="green" disabled={googleLoading} onClick={handleGoogleSignIn} style={{ marginTop: 12 }}>
-            {googleLoading ? 'Connecting...' : 'Sign In with Google Account →'}
+          <Btn
+            full
+            disabled={loading}
+            onClick={handleSendOtp}
+            style={{ marginTop: 8, paddingVertical: 14, borderRadius: 12 }}
+          >
+            {loading ? 'Sending Code...' : 'Get Verification Code →'}
           </Btn>
-        </Modal>
+        </Card>
+      )}
+
+      {/* ── STEP 2: ENTER OTP CODE ────────────────────────────────────────── */}
+      {step === 'otp' && (
+        <Card style={{ padding: 20 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <View>
+              <Text style={{ fontSize: 12, color: T.muted, fontWeight: '500' }}>Mobile Number</Text>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: T.text, marginTop: 2 }}>
+                +91 {phone}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setErrorMsg(null);
+                setStep('phone');
+              }}
+              style={{
+                backgroundColor: T.surface2,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: T.border,
+              }}
+            >
+              <Text style={{ fontSize: 12, color: T.accent, fontWeight: '700' }}>✏️ Change</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Input
+            label="6-Digit Verification Code"
+            placeholder="• • • • • •"
+            value={otp}
+            onChange={(v: string) => {
+              setOtp(v);
+              setErrorMsg(null);
+            }}
+            icon="🔒"
+            keyboardType="number-pad"
+            maxLength={6}
+          />
+
+          {/* Dev Mode Auto-fill Chip */}
+          <TouchableOpacity
+            onPress={() => setOtp(devOtp || '123456')}
+            style={{
+              backgroundColor: '#3B82F614',
+              borderColor: '#3B82F644',
+              borderWidth: 1,
+              borderRadius: 8,
+              paddingVertical: 6,
+              paddingHorizontal: 10,
+              marginBottom: 14,
+              alignSelf: 'flex-start',
+            }}
+          >
+            <Text style={{ color: '#2563EB', fontSize: 11, fontWeight: '600' }}>
+              💡 Dev Code: {devOtp || '123456'} (Tap to fill)
+            </Text>
+          </TouchableOpacity>
+
+          <Btn
+            full
+            disabled={loading}
+            onClick={handleVerifyOtp}
+            style={{ paddingVertical: 14, borderRadius: 12 }}
+          >
+            {loading ? 'Verifying...' : 'Verify & Sign In →'}
+          </Btn>
+
+          {/* Resend OTP Action */}
+          <View style={{ alignItems: 'center', marginTop: 16 }}>
+            {timer > 0 ? (
+              <Text style={{ color: T.muted, fontSize: 13, fontWeight: '500' }}>
+                Resend code in <Text style={{ color: T.text, fontWeight: '700' }}>0:{timer < 10 ? `0${timer}` : timer}</Text>
+              </Text>
+            ) : (
+              <TouchableOpacity
+                onPress={handleSendOtp}
+                disabled={loading}
+                style={{ paddingVertical: 4 }}
+              >
+                <Text style={{ color: T.accent, fontSize: 13, fontWeight: '700' }}>
+                  🔄 Resend OTP Code
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </Card>
       )}
     </PageLayout>
   );
 }
 
-// ── Register Screen (Email Optional) ─────────────────────────────────────────
-export function RegisterScreen({ navigation }: any) {
+// ── Register / Onboarding Screen (Post-OTP Flow) ─────────────────────────────
+export function RegisterScreen({ navigation, route }: any) {
+  const verifiedPhone = route?.params?.phone || '';
+  const { registerResident } = useAuth();
   const [societies, setSocieties] = useState<any[]>([]);
   const [selectedSocietyId, setSelectedSocietyId] = useState<string>('');
   const [flats, setFlats] = useState<any[]>([]);
@@ -463,8 +378,19 @@ export function RegisterScreen({ navigation }: any) {
   const [loadingFlats, setLoadingFlats] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [form, setForm] = useState({ name: '', phone: '', email: '', flat_id: '', password: '', confirm: '' });
+  const [form, setForm] = useState({
+    name: '',
+    phone: verifiedPhone,
+    flat_id: '',
+    email: '',
+  });
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (verifiedPhone && !form.phone) {
+      setForm((prev) => ({ ...prev, phone: verifiedPhone }));
+    }
+  }, [verifiedPhone]);
 
   useEffect(() => {
     SocietyService.getAll()
@@ -501,36 +427,29 @@ export function RegisterScreen({ navigation }: any) {
       setErrorMsg('Please select your society / community.');
       return;
     }
-    if (!form.name.trim() || !form.phone.trim() || !form.flat_id) {
-      setErrorMsg('Please fill in your name, phone number, and select a flat.');
+    if (!form.phone.trim() || !form.flat_id) {
+      setErrorMsg('Please select your flat.');
+      return;
+    }
+    if (!form.name.trim()) {
+      setErrorMsg('Please enter your full name.');
       return;
     }
     if (form.email && !form.email.includes('@')) {
       setErrorMsg('Please enter a valid email address, or leave it blank.');
       return;
     }
-    if (form.password.length < 8) {
-      setErrorMsg('Password must be at least 8 characters long.');
-      return;
-    }
-    if (form.password !== form.confirm) {
-      setErrorMsg('Passwords do not match.');
-      return;
-    }
 
     setLoading(true);
     try {
-      await AuthService.register({
+      await registerResident({
         name: form.name.trim(),
         phone: form.phone.trim(),
-        email: form.email.trim() || null,
-        password: form.password,
         society_id: parseInt(selectedSocietyId),
         flat_id: parseInt(form.flat_id),
         move_in_date: new Date().toISOString().split('T')[0],
       });
-      Alert.alert('Application Submitted', 'Your resident registration is pending society admin verification.');
-      navigation.goBack();
+      // User is now authenticated in AuthContext and will be automatically redirected to ResidentDashboard!
     } catch (err: any) {
       const msg = err.response?.data?.message || err.response?.data?.[0]?.msg || 'Registration failed';
       setErrorMsg(typeof msg === 'string' ? msg : JSON.stringify(msg));
@@ -546,7 +465,11 @@ export function RegisterScreen({ navigation }: any) {
   };
 
   return (
-    <PageLayout title="Join Society" subtitle="Select your community & register flat">
+    <PageLayout
+      title="Join Society"
+      subtitle="Complete your profile to access your flat"
+      scroll={true}
+    >
       {/* Inline Error Banner */}
       {errorMsg ? (
         <View style={{
@@ -572,8 +495,31 @@ export function RegisterScreen({ navigation }: any) {
         </View>
       ) : null}
 
-      <Card style={{ marginTop: 4 }}>
-        {/* Step 1: Society Dropdown */}
+      <Card style={{ marginTop: 4, padding: 20 }}>
+        {/* Step 1: Verified Mobile Badge */}
+        <View style={{
+          backgroundColor: '#10B98114',
+          borderColor: '#10B98144',
+          borderWidth: 1,
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 18,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <View>
+            <Text style={{ fontSize: 11, color: '#059669', fontWeight: '700', textTransform: 'uppercase' }}>
+              Verified Mobile Number
+            </Text>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: T.text, marginTop: 2 }}>
+              +91 {form.phone || verifiedPhone}
+            </Text>
+          </View>
+          <Text style={{ fontSize: 18 }}>✅</Text>
+        </View>
+
+        {/* Step 2: Society Dropdown */}
         <Text style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', marginBottom: 6, fontWeight: '700' }}>
           1. Select Community / Society *
         </Text>
@@ -606,7 +552,7 @@ export function RegisterScreen({ navigation }: any) {
           )}
         </View>
 
-        {/* Step 2: Flat Number Dropdown */}
+        {/* Step 3: Flat Number Dropdown */}
         <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>
           2. Select Flat Number *
         </Text>
@@ -644,22 +590,23 @@ export function RegisterScreen({ navigation }: any) {
           )}
         </View>
 
+        {/* Step 4: Name Input */}
         <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>
-          3. Resident Account Details
+          3. Your Full Name *
         </Text>
-        <Input label="Full Name *" placeholder="Resident Full Name" value={form.name} onChange={(v: string) => { setForm({ ...form, name: v }); setErrorMsg(null); }} />
-        <Input label="Phone Number *" placeholder="98765 43210" value={form.phone} onChange={(v: string) => { setForm({ ...form, phone: v }); setErrorMsg(null); }} />
-        <Input label="Email (Optional)" placeholder="resident@example.com" value={form.email} onChange={(v: string) => { setForm({ ...form, email: v }); setErrorMsg(null); }} />
-        <Input label="Create Password (min 8 chars) *" type="password" value={form.password} onChange={(v: string) => { setForm({ ...form, password: v }); setErrorMsg(null); }} />
-        <Input label="Confirm Password *" type="password" value={form.confirm} onChange={(v: string) => { setForm({ ...form, confirm: v }); setErrorMsg(null); }} />
-
+        <Input
+          placeholder="e.g. John Doe"
+          value={form.name}
+          onChange={(v: string) => setForm({ ...form, name: v })}
+          autoCapitalize="words"
+        />
         <Btn full disabled={loading} onClick={handleSubmit} style={{ marginTop: 10, paddingVertical: 14 }}>
-          {loading ? 'Submitting Application...' : 'Submit Resident Application →'}
+          {loading ? 'Submitting Application...' : 'Complete Setup & Join Society →'}
         </Btn>
       </Card>
 
       <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 20, alignItems: 'center', marginBottom: 20 }}>
-        <Text style={{ color: T.dim }}>← Back to Sign In</Text>
+        <Text style={{ color: T.dim }}>← Back</Text>
       </TouchableOpacity>
     </PageLayout>
   );

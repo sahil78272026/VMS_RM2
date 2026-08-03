@@ -1,6 +1,8 @@
 import api from './api';
 
 export const AuthService = {
+  sendOtp: (phone: string) => api.post('/auth/send-otp', { phone }),
+  verifyOtp: (d: any) => api.post('/auth/verify-otp', d),
   register: (d: any) => api.post('/auth/register', d),
   login: (d: any) => api.post('/auth/login', d),
   googleLogin: (d: any) => api.post('/auth/google', d),
@@ -13,6 +15,7 @@ export const AuthService = {
 
 export const SocietyService = {
   getAll: (p?: any) => api.get('/societies', { params: p }),
+  getCatalog: (p?: any) => api.get('/societies/catalog', { params: p }),
   getById: (id: number | string) => api.get(`/societies/${id}`),
   create: (d: any) => api.post('/societies', d),
   update: (id: number | string, d: any) => api.put(`/societies/${id}`, d),
@@ -37,10 +40,12 @@ export const FlatUserService = {
   remove: (id: string) => api.delete(`/flat-users/${id}`),
   promote: (id: string) => api.patch(`/flat-users/${id}/promote`),
   demote: (id: string) => api.patch(`/flat-users/${id}/demote`),
+  getPendingFamily: () => api.get('/flat-users/pending/family'),
+  approveFamily: (userId: string, relation: string) => api.post(`/flat-users/${userId}/approve-family`, { relation }),
 };
 
 export const GuardService = {
-  getAll: () => api.get('/guards'),
+  getAll: (p?: any) => api.get('/guards', { params: p }),
   getMe: () => api.get('/guards/me'),
   getById: (id: string) => api.get(`/guards/${id}`),
   create: (d: any) => api.post('/guards', d),
@@ -49,7 +54,7 @@ export const GuardService = {
 };
 
 export const GateService = {
-  getAll: () => api.get('/gates'),
+  getAll: (p?: any) => api.get('/gates', { params: p }),
   getById: (id: string) => api.get(`/gates/${id}`),
   create: (d: any) => api.post('/gates', d),
   update: (id: string, d: any) => api.patch(`/gates/${id}`, d),

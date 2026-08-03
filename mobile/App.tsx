@@ -19,13 +19,18 @@ function MainNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!user ? (
         <>
-          <Stack.Screen name="Landing" component={LandingScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Register" component={RegisterScreen} />
+          <Stack.Screen name="Landing" component={LandingScreen} />
         </>
       ) : (
         <>
-          {user.role === 'super_admin' && <Stack.Screen name="SuperAdmin" component={SuperAdminScreen} />}
+          {user.role === 'super_admin' && (
+            <>
+              <Stack.Screen name="SuperAdmin" component={SuperAdminScreen} />
+              <Stack.Screen name="Admin" component={AdminDashboard} />
+            </>
+          )}
           {(user.role === 'admin' || user.role === 'society_admin') && <Stack.Screen name="Admin" component={AdminDashboard} />}
           {user.role === 'resident' && <Stack.Screen name="Resident" component={ResidentDashboard} />}
           {user.role === 'guard' && <Stack.Screen name="Guard" component={GuardDashboard} />}

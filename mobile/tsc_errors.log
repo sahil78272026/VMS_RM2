@@ -1,0 +1,11 @@
+src/screens/admin/SuperAdminScreen.tsx(626,120): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/screens/admin/SuperAdminScreen.tsx(629,132): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/screens/admin/SuperAdminScreen.tsx(637,123): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/screens/admin/SuperAdminScreen.tsx(640,119): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/screens/admin/SuperAdminScreen.tsx(648,123): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/screens/admin/SuperAdminScreen.tsx(651,119): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/screens/admin/SuperAdminScreen.tsx(654,127): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/screens/admin/index.tsx(632,46): error TS2339: Property 'surface' does not exist on type '{ bg: string; headerBg: string; headerBorder: string; cardBg: string; cardBorder: string; cardSubtle: string; text: string; textMuted: string; textDim: string; accent: string; accentDim: string; green: string; ... 5 more ...; shadow: { ...; }; }'.
+src/screens/admin/index.tsx(632,73): error TS2339: Property 'border' does not exist on type '{ bg: string; headerBg: string; headerBorder: string; cardBg: string; cardBorder: string; cardSubtle: string; text: string; textMuted: string; textDim: string; accent: string; accentDim: string; green: string; ... 5 more ...; shadow: { ...; }; }'.
+src/screens/auth/index.tsx(437,14): error TS2339: Property 'email' does not exist on type '{ name: string; phone: any; flat_id: string; }'.
+src/screens/auth/index.tsx(437,29): error TS2339: Property 'email' does not exist on type '{ name: string; phone: any; flat_id: string; }'.

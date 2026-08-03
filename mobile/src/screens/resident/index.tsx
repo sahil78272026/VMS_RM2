@@ -95,6 +95,8 @@ export function ResidentDashboard({ route }: any) {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [passes, setPasses] = useState<any[]>([]);
   const [preApprovals, setPreApprovals] = useState<any[]>([]);
+  const [pendingFamily, setPendingFamily] = useState<any[]>([]);
+  const [myFlatUser, setMyFlatUser] = useState<any>(null);
   
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<any>(null);
@@ -102,14 +104,20 @@ export function ResidentDashboard({ route }: any) {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
+    if (user?.status === 'pending_verification') {
+      setLoading(false);
+      return;
+    }
     try {
-      const [pr, lr, br, ar, par, fpr] = await Promise.all([
+      const [pr, lr, br, ar, par, fpr, pfr, myfr] = await Promise.all([
         VisitorLogService.getMyPending().catch(() => ({ data: { data: [] } })),
         VisitorLogService.getMyLogs({ per_page: 20 }).catch(() => ({ data: { data: [] } })),
         MaintenanceService.getMy().catch(() => ({ data: { data: { payments: [] } } })),
         AnnouncementService.getAll().catch(() => ({ data: { data: [] } })),
         PreApprovalService.getMy().catch(() => ({ data: { data: [] } })),
         FrequentPassService.getMy().catch(() => ({ data: { data: [] } })),
+        FlatUserService.getPendingFamily().catch(() => ({ data: { data: [] } })),
+        FlatUserService.getMyFlat().catch(() => ({ data: { data: [] } })),
       ]);
       setPending(pr.data?.data || []);
       setLogs(lr.data?.data?.items || lr.data?.data || []);
@@ -118,6 +126,10 @@ export function ResidentDashboard({ route }: any) {
       setAnnouncements(ar.data?.data?.items || ar.data?.data || []);
       setPreApprovals(par.data?.data || []);
       setPasses(fpr.data?.data || []);
+      setPendingFamily(pfr.data?.data || []);
+      const allMembers = myfr?.data?.data || [];
+      const me = allMembers.find((m: any) => m.user_id === user?.id);
+      setMyFlatUser(me || null);
     } catch {}
     setLoading(false);
   }, [activeSocietyId]);
@@ -176,6 +188,27 @@ export function ResidentDashboard({ route }: any) {
       Alert.alert('Payment Submitted', 'Your maintenance renewal was submitted for admin approval!');
     } catch (err: any) {
       Alert.alert('Error', err.response?.data?.message || 'Failed');
+    }
+  };
+
+  const approveFamilyMember = async (familyUser: any) => {
+    try {
+      await FlatUserService.approveFamily(familyUser.id, 'family');
+      load();
+      Alert.alert('Family Member Approved', `${familyUser.name} can now access the flat.`);
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.message || 'Failed to approve family member');
+    }
+  };
+
+  const updateOwnerStatus = async (isOwner: boolean) => {
+    if (!myFlatUser?.id) return;
+    try {
+      await FlatUserService.update(myFlatUser.id, { is_owner: isOwner });
+      load();
+      Alert.alert('Profile Updated', `You are now marked as a ${isOwner ? 'Owner' : 'Tenant'}.`);
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.message || 'Failed to update profile');
     }
   };
 
@@ -783,6 +816,88 @@ export function ResidentDashboard({ route }: any) {
               <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 11 }}>VERIFIED RESIDENT</Text>
             </View>
           </View>
+          {myFlatUser && (
+            <View style={{ marginTop: 24, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 20, borderColor: Warm.cardBorder, borderWidth: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginBottom: 12 }}>
+                Occupancy Status
+              </Text>
+              <Text style={{ fontSize: 13, color: Warm.textMuted, marginBottom: 16 }}>
+                Are you renting this flat, or are you the owner?
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => updateOwnerStatus(false)}
+                  style={{
+                    flex: 1,
+                    padding: 12,
+                    borderRadius: 12,
+                    backgroundColor: myFlatUser.is_owner ? '#F8F6F2' : Warm.accent,
+                    borderColor: myFlatUser.is_owner ? Warm.cardBorder : Warm.accent,
+                    borderWidth: 1,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontWeight: '800', color: myFlatUser.is_owner ? Warm.textMuted : '#FFF' }}>Tenant</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => updateOwnerStatus(true)}
+                  style={{
+                    flex: 1,
+                    padding: 12,
+                    borderRadius: 12,
+                    backgroundColor: myFlatUser.is_owner ? Warm.accent : '#F8F6F2',
+                    borderColor: myFlatUser.is_owner ? Warm.accent : Warm.cardBorder,
+                    borderWidth: 1,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontWeight: '800', color: myFlatUser.is_owner ? '#FFF' : Warm.textMuted }}>Owner</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {pendingFamily.length > 0 && (
+            <View style={{ marginTop: 20 }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginBottom: 12 }}>
+                Pending Family Approvals
+              </Text>
+              {pendingFamily.map((pf: any) => (
+                <View key={pf.id} style={{
+                  backgroundColor: '#FFFFFF',
+                  padding: 16,
+                  borderRadius: 16,
+                  borderColor: '#E5DFD7',
+                  borderWidth: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: 10,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}>
+                  <Avatar name={pf.name} size={44} color={Warm.accent} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text }}>{pf.name}</Text>
+                    <Text style={{ fontSize: 13, color: Warm.textMuted }}>{pf.phone}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => approveFamilyMember(pf)}
+                    style={{
+                      backgroundColor: Warm.green,
+                      paddingHorizontal: 16,
+                      paddingVertical: 8,
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Approve</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
 
           <TouchableOpacity
             onPress={logout}
@@ -802,6 +917,23 @@ export function ResidentDashboard({ route }: any) {
       );
     }
   };
+
+  if (user?.status === 'pending_verification') {
+    return (
+      <View style={{ flex: 1, backgroundColor: Warm.bg, justifyContent: 'center', padding: 24 }}>
+        <Card style={{ padding: 24, alignItems: 'center' }}>
+          <Text style={{ fontSize: 40, marginBottom: 16 }}>⏳</Text>
+          <Text style={{ fontSize: 20, fontWeight: '800', color: Warm.text, marginBottom: 8, textAlign: 'center' }}>
+            Account Verification Pending
+          </Text>
+          <Text style={{ color: Warm.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
+            Your request to join <Text style={{ fontWeight: '700', color: Warm.text }}>{activeSociety?.name || user?.society_name || 'the society'}</Text> as a resident of Flat <Text style={{ fontWeight: '700', color: Warm.text }}>{activeFlatNumber}</Text> is currently under review. The Society Admin or the Primary Resident of this flat will need to approve your request before you can access the platform.
+          </Text>
+          <Btn full onClick={logout} variant="outline">Sign Out & Check Later</Btn>
+        </Card>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: Warm.bg }}>

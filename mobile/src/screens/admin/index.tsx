@@ -111,7 +111,7 @@ export function AdminDashboard({ navigation }: any) {
     isLoadingRef.current = true;
     if (page > 1) setLoadingMore(true);
     try {
-      const res = await MaintenanceService.getFlats({ page, per_page: 20, query });
+      const res = await MaintenanceService.getFlats({ page, per_page: 20, query, society_id: activeSocietyId });
       const newItems = res.data?.data?.items || [];
       if (append) {
         setMaintenanceFlats(prev => {
@@ -131,11 +131,11 @@ export function AdminDashboard({ navigation }: any) {
   const load = useCallback(async () => {
     try {
       const [fr, gr, pr, ar, p_pay] = await Promise.all([
-        FlatService.getAll({ per_page: 500 }).catch(() => ({ data: { data: [] } })),
-        GuardService.getAll().catch(() => ({ data: { data: [] } })),
-        UserService.getAll({ role: 'resident', status: 'pending_verification' }).catch(() => ({ data: { data: [] } })),
-        UserService.getAll({ role: 'resident', status: 'active' }).catch(() => ({ data: { data: [] } })),
-        MaintenanceService.getPending().catch(() => ({ data: { data: [] } })),
+        FlatService.getAll({ per_page: 5000, society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
+        GuardService.getAll({ society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
+        UserService.getAll({ role: 'resident', status: 'pending_verification', society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
+        UserService.getAll({ role: 'resident', status: 'active', society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
+        MaintenanceService.getPending({ society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
       ]);
       setFlats(fr.data?.data?.items || fr.data?.data || []);
       setGuards(gr.data?.data?.items || gr.data?.data || []);
@@ -622,6 +622,18 @@ export function AdminDashboard({ navigation }: any) {
           })}
 
           {loadingMore && <ActivityIndicator size="small" color={Warm.accent} style={{ marginVertical: 20 }} />}
+          {!loadingMore && flatPage < flatTotalPages && (
+            <TouchableOpacity 
+              onPress={() => {
+                const nextPage = flatPage + 1;
+                loadMaintenanceFlats(nextPage, searchQuery, true);
+                setFlatPage(nextPage);
+              }}
+              style={{ backgroundColor: Warm.cardBg, borderColor: Warm.cardBorder, borderWidth: 1, padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 10, marginBottom: 20 }}
+            >
+              <Text style={{ color: Warm.text, fontWeight: '700', fontSize: 13 }}>Load More Flats ({maintenanceFlats.length} loaded)</Text>
+            </TouchableOpacity>
+          )}
         </View>
       );
     }
@@ -738,9 +750,18 @@ export function AdminDashboard({ navigation }: any) {
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <SocietySwitcher theme="warm" />
-          <View style={{ backgroundColor: Warm.accentDim, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-            <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 11 }}>ADMIN CONSOLE</Text>
-          </View>
+          {user?.role === 'super_admin' ? (
+            <TouchableOpacity
+              onPress={() => navigation?.navigate('SuperAdmin')}
+              style={{ backgroundColor: Warm.accentDim, borderColor: Warm.accent + '66', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}
+            >
+              <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 11 }}>← PLATFORM ADMIN</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={{ backgroundColor: Warm.accentDim, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
+              <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 11 }}>ADMIN CONSOLE</Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -748,6 +769,18 @@ export function AdminDashboard({ navigation }: any) {
       <ScrollView
         style={{ flex: 1, paddingHorizontal: 18, paddingTop: 18 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Warm.accent} />}
+        scrollEventThrottle={400}
+        onScroll={({ nativeEvent }) => {
+          const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+          const paddingToBottom = 150;
+          if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
+            if (!loadingMore && flatPage < flatTotalPages && currentTab === 'maintenance') {
+              const nextPage = flatPage + 1;
+              loadMaintenanceFlats(nextPage, searchQuery, true);
+              setFlatPage(nextPage);
+            }
+          }
+        }}
       >
         <Animated.View {...panResponder.panHandlers} style={{ minHeight: Dimensions.get('window').height - 230, transform: [{ translateX: slideAnim }], paddingBottom: 85 + Math.max(insets.bottom, 16) }}>
           {renderContent()}
