@@ -24,10 +24,17 @@ def list_societies(
 ):
     service = SocietyService(db)
     societies = service.get_all(status=status)
+    data = []
+    for s in societies:
+        s_dict = s.to_dict()
+        admins = service.get_society_admins(s.id)
+        s_dict["admins"] = [{"id": a.user.id, "name": a.user.name, "phone": a.user.phone} for a in admins if a.user]
+        data.append(s_dict)
+
     return {
         "success": True,
         "message": "Societies retrieved",
-        "data": [s.to_dict() for s in societies],
+        "data": data,
         "error": None
     }
 
@@ -44,6 +51,40 @@ def create_society(
         "success": True,
         "message": f"Society '{society.name}' created successfully",
         "data": society.to_dict(),
+        "error": None
+    }
+
+
+@router.get("/catalog")
+def get_society_catalog(
+    city: Optional[str] = Query(None),
+    q: Optional[str] = Query(None)
+):
+    import json
+    import os
+    catalog_path = os.path.join(os.path.dirname(__file__), "..", "data", "up_societies_catalog.json")
+    try:
+        with open(catalog_path, "r", encoding="utf-8") as f:
+            items = json.load(f)
+    except Exception as e:
+        items = []
+
+    if city and city.lower() != "all":
+        items = [i for i in items if i.get("city", "").lower() == city.lower()]
+
+    if q:
+        q_lower = q.lower()
+        items = [
+            i for i in items
+            if q_lower in i.get("name", "").lower()
+            or q_lower in i.get("address", "").lower()
+            or q_lower in i.get("zone", "").lower()
+        ]
+
+    return {
+        "success": True,
+        "message": "UP Society catalog retrieved",
+        "data": items,
         "error": None
     }
 
@@ -150,10 +191,10 @@ def assign_society_admin(
     db: Session = Depends(get_db)
 ):
     service = SocietyService(db)
-    assignment = service.assign_admin(society_id, data.user_id)
+    assignment = service.assign_admin(society_id, user_id=data.user_id, data=data.dict())
     return {
         "success": True,
-        "message": f"User {data.user_id} assigned as admin of society {society_id}",
+        "message": f"Admin assigned to society {society_id} successfully",
         "data": assignment.to_dict(),
         "error": None
     }

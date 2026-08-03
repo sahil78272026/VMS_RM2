@@ -39,6 +39,7 @@ class GateSessionService:
             logger.warning(f"[GATE_SESSION] Force-closed previous session for guard {guard_id}")
 
         session = GateSession(
+            society_id  = gate.society_id,
             guard_id    = guard_id,
             gate_id     = gate_id,
             shift_start = datetime.utcnow(),

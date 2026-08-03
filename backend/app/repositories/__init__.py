@@ -37,20 +37,25 @@ class SocietyRepository(BaseRepository):
 
     def get_user_societies(self, user_id: int) -> List[Society]:
         """Return all societies a user has access to (via SocietyAdmin or FlatUser or Guard)."""
-        society_ids = set()
-        # As society admin
-        for sa in self.db.query(SocietyAdmin).filter_by(user_id=user_id).all():
-            society_ids.add(sa.society_id)
+        society_ids = []
+        # As society admin (most recent first)
+        for sa in self.db.query(SocietyAdmin).filter_by(user_id=user_id).order_by(SocietyAdmin.id.desc()).all():
+            if sa.society_id not in society_ids:
+                society_ids.append(sa.society_id)
         # As resident
-        for fu in self.db.query(FlatUser).filter_by(user_id=user_id).all():
-            society_ids.add(fu.society_id)
+        for fu in self.db.query(FlatUser).filter_by(user_id=user_id).order_by(FlatUser.id.desc()).all():
+            if fu.society_id not in society_ids:
+                society_ids.append(fu.society_id)
         # As guard
-        for g in self.db.query(Guard).filter_by(user_id=user_id).all():
-            society_ids.add(g.society_id)
+        for g in self.db.query(Guard).filter_by(user_id=user_id).order_by(Guard.id.desc()).all():
+            if g.society_id not in society_ids:
+                society_ids.append(g.society_id)
 
         if not society_ids:
             return []
-        return self.db.query(Society).filter(Society.id.in_(society_ids)).all()
+        
+        soc_map = {s.id: s for s in self.db.query(Society).filter(Society.id.in_(society_ids)).all()}
+        return [soc_map[sid] for sid in society_ids if sid in soc_map]
 
 
 # ── Society Admin Repository ───────────────────────────────────────────────

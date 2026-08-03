@@ -7,7 +7,8 @@ from app.api.deps import get_current_user, get_active_society_id
 from app.services.maintenance_service import MaintenanceService
 from app.repositories import FlatUserRepository
 from app.utils.response import success, error
-from app.utils.exceptions import AppException
+from app.utils.security import JWT_SECRET_KEY, ALGORITHM
+import jwt
 
 router = APIRouter(prefix="/api/v1/maintenance", tags=["maintenance"])
 
@@ -64,6 +65,17 @@ async def admin_get_pending(
     try:
         header_society_id = request.headers.get("X-Society-ID")
         target_society_id = society_id or (int(header_society_id) if header_society_id and header_society_id.isdigit() else None)
+        
+        if not target_society_id:
+            auth_header = request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                try:
+                    raw_token = auth_header.split(" ")[1]
+                    payload = jwt.decode(raw_token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+                    target_society_id = payload.get("active_society_id")
+                except Exception:
+                    pass
+
         maintenance_service = MaintenanceService(db)
         payments = maintenance_service.admin_get_pending_payments(society_id=target_society_id)
         return success("Pending payments fetched", data=payments)
@@ -85,6 +97,17 @@ async def admin_get_flats(
     try:
         header_society_id = request.headers.get("X-Society-ID")
         target_society_id = society_id or (int(header_society_id) if header_society_id and header_society_id.isdigit() else None)
+        
+        if not target_society_id:
+            auth_header = request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                try:
+                    raw_token = auth_header.split(" ")[1]
+                    payload = jwt.decode(raw_token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+                    target_society_id = payload.get("active_society_id")
+                except Exception:
+                    pass
+
         maintenance_service = MaintenanceService(db)
         paginated_flats = maintenance_service.admin_get_all_flats(
             society_id=target_society_id,

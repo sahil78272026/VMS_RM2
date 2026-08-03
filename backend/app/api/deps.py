@@ -78,18 +78,23 @@ def require_society_admin(
     db: Session = Depends(get_db)
 ) -> User:
     """
-    Ensures user is a Super Admin or is an assigned Admin for the target society.
+    Ensures user is an explicitly assigned Admin for the target society.
+    Super Admins are restricted to read-only access unless explicitly assigned.
     """
-    if user.is_super_admin or user.role == "super_admin":
-        return user
-
-    if user.role == "admin":
+    if user.role == "admin" or user.is_super_admin:
         # Check if explicitly assigned to this society
         is_assigned = db.query(SocietyAdmin).filter_by(
             society_id=society_id, user_id=user.id
         ).first() is not None
+        
         if is_assigned:
             return user
+            
+        if user.is_super_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Super Admins have read-only access. Assign yourself as an admin to society {society_id} to perform write operations."
+            )
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,

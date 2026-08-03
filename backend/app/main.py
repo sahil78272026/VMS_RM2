@@ -112,12 +112,7 @@ def create_app() -> FastAPI:
     app.include_router(users_router)
     app.include_router(sse_router)
 
-    from slowapi import _rate_limit_exceeded_handler
-    from slowapi.errors import RateLimitExceeded
-    from app.api.auth import limiter
-    
-    app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
     @app.api_route("/health", methods=["GET", "HEAD"])
     def health():

@@ -16,6 +16,7 @@ from app.utils.exceptions import (
 )
 from app.utils.security import create_access_token, create_refresh_token
 from app.schemas.auth import RegisterResidentRequest
+from app.services.otp_service import OTPService
 
 logger = logging.getLogger(__name__)
 
@@ -34,28 +35,67 @@ class AuthService:
         if data.email and self.user_repo.email_exists(data.email):
             raise DuplicateEntryError("Email already registered", field="email")
 
+        import secrets
+        raw_password = data.password or secrets.token_urlsafe(16)
         password_hash = bcrypt.hashpw(
-            data.password.encode("utf-8"),
+            raw_password.encode("utf-8"),
             bcrypt.gensalt()
         ).decode("utf-8")
 
         from datetime import date
+        move_in = date.fromisoformat(data.move_in_date) if data.move_in_date else date.today()
         
         user = User(
-            name          = data.name.strip(),
+            name          = data.name.strip() if data.name else "Resident",
             phone         = data.phone.strip(),
             email         = data.email.strip() if data.email else None,
             password_hash = password_hash,
             role          = "resident",
             status        = "pending_verification",
             requested_flat_id = data.flat_id,
-            move_in_date  = date.fromisoformat(data.move_in_date) if data.move_in_date else None,
+            move_in_date  = move_in,
         )
 
         self.user_repo.save(user)
         logger.info(f"[AUTH] New resident registered: {user.phone}")
 
-        return user.to_dict()
+        from app.models import Flat
+        flat = self.db.query(Flat).filter_by(id=data.flat_id).first()
+        society_id = flat.society_id if flat else (data.society_id or 1)
+        flat_number = flat.flat_number if flat else None
+        
+        from app.models import Society
+        society = self.db.query(Society).filter_by(id=society_id).first()
+        society_name = society.name if society else None
+        
+        user_societies = self.get_user_societies(user)
+        active_society_id = society_id
+
+        additional_claims = {
+            "role":              user.role,
+            "status":            user.status,
+            "name":              user.name,
+            "is_super_admin":    user.is_super_admin,
+            "active_society_id": active_society_id,
+            "flat_number":       flat_number,
+            "society_name":      society_name,
+        }
+
+        access_token  = create_access_token(identity=str(user.id), additional_claims=additional_claims)
+        refresh_token = create_refresh_token(identity=str(user.id), additional_claims=additional_claims)
+
+        user_dict = user.to_dict()
+        user_dict["societies"] = user_societies
+        user_dict["active_society_id"] = active_society_id
+        user_dict["flat_number"] = flat_number
+        user_dict["society_name"] = society_name
+
+        return {
+            "access_token":      access_token,
+            "refresh_token":     refresh_token,
+            "active_society_id": active_society_id,
+            "user":              user_dict,
+        }
 
     def get_user_societies(self, user: User) -> list:
         """Returns list of all societies this user belongs to or can access."""
@@ -78,9 +118,7 @@ class AuthService:
         if not password_match:
             raise InvalidCredentialsError("Incorrect password. Please try again.")
 
-        if user.status != "active":
-            if user.status == "pending_verification":
-                raise AccountInactiveError("Your flat registration is pending approval by the Society Admin.")
+        if user.status == "inactive":
             raise AccountInactiveError("Your account is inactive. Please contact the society admin.")
 
         user.last_login = datetime.utcnow()
@@ -101,8 +139,10 @@ class AuthService:
         else:
             if user_societies:
                 active_society_id = user_societies[0]["id"]
-            else:
+            elif user.is_super_admin:
                 active_society_id = 1
+            else:
+                active_society_id = None
 
         additional_claims = {
             "role":              user.role,
@@ -122,6 +162,94 @@ class AuthService:
         user_dict["active_society_id"] = active_society_id
 
         return {
+            "access_token":      access_token,
+            "refresh_token":     refresh_token,
+            "active_society_id": active_society_id,
+            "user":              user_dict,
+        }
+
+    def send_otp(self, phone: str) -> dict:
+        phone_clean = phone.strip().replace(" ", "").replace("-", "")
+        if not phone_clean:
+            raise ValidationError({"phone": "Phone number is required."})
+
+        return OTPService.send_otp(phone_clean)
+
+    def verify_otp(self, phone: str, otp: str, expo_push_token: str = None, requested_society_id: int = None) -> dict:
+        phone_clean = phone.strip().replace(" ", "").replace("-", "")
+        if not phone_clean or not otp:
+            raise ValidationError({"otp": "Phone and OTP code are required."})
+
+        is_valid = OTPService.verify_otp(phone_clean, otp)
+        if not is_valid:
+            raise InvalidCredentialsError("Invalid or expired verification code. Please try again.")
+
+        user = self.user_repo.get_by_phone(phone_clean)
+        if not user:
+            # New unregistered user
+            return {
+                "is_new_user": True,
+                "phone": phone_clean,
+                "message": "Phone number verified. Please register your account and select a flat."
+            }
+
+        if user.status == "inactive":
+            raise AccountInactiveError("Your account is inactive. Please contact the society admin.")
+
+        user.last_login = datetime.utcnow()
+        if expo_push_token:
+            user.expo_push_token = expo_push_token
+        self.user_repo.save(user)
+
+        user_societies = self.get_user_societies(user)
+
+        active_society_id = None
+        if requested_society_id:
+            if user.is_super_admin or any(s["id"] == requested_society_id for s in user_societies):
+                active_society_id = requested_society_id
+            else:
+                raise ForbiddenError(f"User does not have access to society {requested_society_id}")
+        else:
+            if user_societies:
+                active_society_id = user_societies[0]["id"]
+            elif user.is_super_admin:
+                active_society_id = 1
+            else:
+                active_society_id = None
+
+        additional_claims = {
+            "role":              user.role,
+            "status":            user.status,
+            "name":              user.name,
+            "is_super_admin":    user.is_super_admin,
+            "active_society_id": active_society_id,
+        }
+
+        access_token  = create_access_token(identity=str(user.id), additional_claims=additional_claims)
+        refresh_token = create_refresh_token(identity=str(user.id), additional_claims=additional_claims)
+
+        logger.info(f"[AUTH] OTP Login successful: {user.phone} ({user.role}) - active society: {active_society_id}")
+
+        user_dict = user.to_dict()
+        user_dict["societies"] = user_societies
+        user_dict["active_society_id"] = active_society_id
+        
+        society_name = None
+        if active_society_id:
+            from app.models import Society
+            soc = self.user_repo.db.query(Society).filter_by(id=active_society_id).first()
+            if soc:
+                society_name = soc.name
+        user_dict["society_name"] = society_name
+        
+        if user.requested_flat_id:
+            from app.models import Flat
+            flat_obj = self.user_repo.db.query(Flat).filter(Flat.id == user.requested_flat_id).first()
+            if flat_obj:
+                user_dict["flat_number"] = flat_obj.flat_number
+
+        return {
+            "is_new_user":       False,
             "access_token":      access_token,
             "refresh_token":     refresh_token,
             "active_society_id": active_society_id,
@@ -180,8 +308,10 @@ class AuthService:
         else:
             if user_societies:
                 active_society_id = user_societies[0]["id"]
-            else:
+            elif user.is_super_admin:
                 active_society_id = 1
+            else:
+                active_society_id = None
 
         additional_claims = {
             "role":              user.role,

@@ -28,7 +28,11 @@ class BatchCreateFlatsRequest(BaseModel):
     block_names: Optional[List[str]] = None  # e.g. ["A", "B", "C"]
     floors: Optional[int] = None
     flats_per_floor: Optional[int] = None
+    flat_numbers: Optional[List[str]] = None
 
 
 class AssignAdminRequest(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None

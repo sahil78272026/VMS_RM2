@@ -153,6 +153,8 @@ class FlatUserService:
 
         if data.get("can_approve") is not None:
             target.can_approve = data["can_approve"]
+        if data.get("is_owner") is not None:
+            target.is_owner = data["is_owner"]
         if data.get("relation"):
             target.role = data["relation"]
         if data.get("move_out_date"):

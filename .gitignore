@@ -35,3 +35,6 @@ ios/Pods/
 .vscode/
 .idea/
 *.swp
+
+
+tests/

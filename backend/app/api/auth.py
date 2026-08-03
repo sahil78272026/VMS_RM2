@@ -3,13 +3,16 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.services.auth_service import AuthService
-from app.schemas.auth import RegisterResidentRequest, LoginRequest, GoogleLoginRequest, ChangePasswordRequest
+from app.schemas.auth import (
+    RegisterResidentRequest,
+    LoginRequest,
+    GoogleLoginRequest,
+    ChangePasswordRequest,
+    SendOTPRequest,
+    VerifyOTPRequest
+)
 from app.api.deps import get_current_user, active_account_required
 from app.models import User
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
 
@@ -17,8 +20,36 @@ class SwitchSocietyRequest(BaseModel):
     society_id: int
 
 
+@router.post("/send-otp")
+def send_otp(request: Request, data: SendOTPRequest, db: Session = Depends(get_db)):
+    auth_service = AuthService(db)
+    result = auth_service.send_otp(data.phone)
+    return {
+        "success": result["success"],
+        "message": result["message"],
+        "data": result,
+        "error": None
+    }
+
+
+@router.post("/verify-otp")
+def verify_otp(request: Request, data: VerifyOTPRequest, db: Session = Depends(get_db)):
+    auth_service = AuthService(db)
+    result = auth_service.verify_otp(
+        phone=data.phone,
+        otp=data.otp,
+        expo_push_token=data.expo_push_token,
+        requested_society_id=data.society_id
+    )
+    return {
+        "success": True,
+        "message": "OTP verified successfully",
+        "data": result,
+        "error": None
+    }
+
+
 @router.post("/register")
-@limiter.limit("10/minute")
 def register(request: Request, data: RegisterResidentRequest, db: Session = Depends(get_db)):
     auth_service = AuthService(db)
     user = auth_service.register_resident(data)
@@ -31,7 +62,6 @@ def register(request: Request, data: RegisterResidentRequest, db: Session = Depe
 
 
 @router.post("/login")
-@limiter.limit("20/minute")
 def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
     auth_service = AuthService(db)
     result = auth_service.login(
@@ -49,7 +79,6 @@ def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/google")
-@limiter.limit("20/minute")
 def google_login(request: Request, data: GoogleLoginRequest, db: Session = Depends(get_db)):
     auth_service = AuthService(db)
     result = auth_service.google_login(

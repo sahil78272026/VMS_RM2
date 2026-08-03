@@ -131,3 +131,56 @@ async def demote_from_primary(flat_user_id: int, request: Request, db: Session =
         return error(e.message, e.code, e.details, e.status_code)
     except Exception as e:
         return error("Failed to demote member", "SERVER_ERROR", str(e), 500)
+
+@router.get("/pending/family")
+async def get_pending_family(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Primary resident: view users who requested to join their flat."""
+    try:
+        from app.models import FlatUser, User
+        requester = db.query(FlatUser).filter_by(user_id=current_user.id, role="primary").first()
+        if not requester:
+            return success("No flat assignment", data=[])
+            
+        pending = db.query(User).filter_by(
+            requested_flat_id=requester.flat_id,
+            status="pending_verification"
+        ).all()
+        return success("Pending family fetched", data=[u.to_dict() for u in pending])
+    except Exception as e:
+        return error("Failed to fetch pending family", "SERVER_ERROR", str(e), 500)
+
+@router.post("/{user_id}/approve-family")
+async def approve_family_member(user_id: int, request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Primary resident: approve a pending family member."""
+    try:
+        from app.models import FlatUser, User
+        requester = db.query(FlatUser).filter_by(user_id=current_user.id, role="primary").first()
+        if not requester:
+            raise AppException("Only primary members can approve family", "FORBIDDEN", 403)
+            
+        target = db.query(User).filter_by(id=user_id, status="pending_verification").first()
+        if not target or target.requested_flat_id != requester.flat_id:
+            raise AppException("User not found or invalid flat", "NOT_FOUND", 404)
+            
+        data = await request.json()
+        relation = data.get("relation", "family")
+        
+        target.status = "active"
+        target.move_in_date = target.move_in_date or __import__('datetime').date.today()
+        
+        flat_user = FlatUser(
+            society_id=requester.society_id,
+            user_id=target.id,
+            flat_id=requester.flat_id,
+            role=relation,
+            is_owner=False,
+            can_approve=False,
+            move_in_date=target.move_in_date
+        )
+        db.add(flat_user)
+        db.commit()
+        return success("Family member approved", data=flat_user.to_dict())
+    except AppException as e:
+        return error(e.message, e.code, e.details, e.status_code)
+    except Exception as e:
+        return error("Failed to approve family member", "SERVER_ERROR", str(e), 500)

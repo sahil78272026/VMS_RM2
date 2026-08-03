@@ -17,6 +17,10 @@ from app.utils.response import success, error
 from app.utils.exceptions import AppException
 
 
+from app.utils.security import JWT_SECRET_KEY, ALGORITHM
+import jwt
+
+
 router = APIRouter(prefix="/api/v1/flats", tags=["flats"])
 
 
@@ -38,6 +42,16 @@ async def get_all_flats(
         flat_service = FlatService(db)
         header_society_id = request.headers.get("X-Society-ID")
         target_society_id = society_id or (int(header_society_id) if header_society_id and header_society_id.isdigit() else None)
+
+        if not target_society_id:
+            auth_header = request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                try:
+                    raw_token = auth_header.split(" ")[1]
+                    payload = jwt.decode(raw_token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+                    target_society_id = payload.get("active_society_id")
+                except Exception:
+                    pass
 
         result = flat_service.get_all(society_id=target_society_id, status=status, page=page, per_page=per_page)
         return success(

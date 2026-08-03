@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
+const SOCIETY_ID = import.meta.env.VITE_SOCIETY_ID || '6';
+const SOCIETY_NAME = import.meta.env.VITE_SOCIETY_NAME || 'RM2 Residency';
 
 export default function App() {
   const [step, setStep] = useState('form');
@@ -24,7 +26,7 @@ export default function App() {
   const set = (k: string) => (v: string) => setForm(p => ({...p, [k]: v}));
 
   useEffect(() => {
-    fetch(`${API_BASE}/flats?per_page=200`)
+    fetch(`${API_BASE}/flats?per_page=5000&society_id=${SOCIETY_ID}`)
       .then(r => r.json())
       .then(d => setFlats(d.data?.items || d.data || []))
       .catch(console.error);
@@ -123,7 +125,7 @@ export default function App() {
 
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>📱</div>
-          <h1 style={{ fontSize: 24, marginBottom: 8 }}>RM2 Residency</h1>
+          <h1 style={{ fontSize: 24, marginBottom: 8 }}>{SOCIETY_NAME}</h1>
           <p style={{ color: 'var(--text-secondary)' }}>Visitor Self Check-In</p>
         </div>
         

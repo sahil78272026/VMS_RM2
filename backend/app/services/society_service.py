@@ -3,7 +3,7 @@ from datetime import datetime
 import logging
 logger = logging.getLogger(__name__)
 
-from app.models import Society, SocietyAdmin, Flat, Gate, Guard, VisitorLog
+from app.models import Society, SocietyAdmin, Flat, Gate, Guard, VisitorLog, User
 from app.repositories import (
     SocietyRepository, SocietyAdminRepository, FlatRepository,
     GateRepository, GuardRepository, UserRepository, VisitorLogRepository
@@ -145,33 +145,65 @@ class SocietyService:
         flats_per_floor = data.get("flats_per_floor")
 
         created_flats = []
+        
+        flat_numbers_list = data.get("flat_numbers")
+        existing_flats_db = self.flat_repo.get_all_by_society(society_id)
+        existing_flats = {f.flat_number for f in existing_flats_db}
 
-        if block_names and floors and flats_per_floor:
+        if flat_numbers_list and isinstance(flat_numbers_list, list):
+            unique_flats = []
+            seen = set()
+            for f in flat_numbers_list:
+                f_clean = str(f).strip()
+                if f_clean not in seen and f_clean not in existing_flats:
+                    unique_flats.append(f_clean)
+                    seen.add(f_clean)
+
+            from sqlalchemy.exc import IntegrityError
+            for num_str in unique_flats:
+                flat = Flat(
+                    society_id=society_id,
+                    flat_number=num_str,
+                    status="vacant"
+                )
+                created_flats.append(flat)
+
+        elif block_names and floors and flats_per_floor:
+            from sqlalchemy.exc import IntegrityError
             # Generate e.g. A-101, A-102, B-101, ...
             for block in block_names:
                 for floor in range(1, floors + 1):
                     for unit in range(1, flats_per_floor + 1):
                         num_str = f"{block}-{floor}{unit:02d}"
-                        if not self.flat_repo.flat_number_exists(num_str, society_id=society_id):
+                        if num_str not in existing_flats:
                             flat = Flat(
                                 society_id=society_id,
                                 flat_number=num_str,
                                 status="vacant"
                             )
-                            self.flat_repo.save(flat)
                             created_flats.append(flat)
+                            existing_flats.add(num_str)
         else:
+            from sqlalchemy.exc import IntegrityError
             # Sequential e.g. 101, 102, 103...
             for i in range(count):
                 num_str = f"{prefix}{start_number + i}"
-                if not self.flat_repo.flat_number_exists(num_str, society_id=society_id):
+                if num_str not in existing_flats:
                     flat = Flat(
                         society_id=society_id,
                         flat_number=num_str,
                         status="vacant"
                     )
-                    self.flat_repo.save(flat)
                     created_flats.append(flat)
+                    existing_flats.add(num_str)
+
+        if created_flats:
+            self.db.add_all(created_flats)
+            try:
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                pass
 
         # Update society total_flats
         all_flats_count = self.db.query(Flat).filter_by(society_id=society_id).count()
@@ -181,18 +213,48 @@ class SocietyService:
         logger.info(f"[SOCIETY] Created {len(created_flats)} flats for society id={society_id}")
         return [f.to_dict() for f in created_flats]
 
-    def assign_admin(self, society_id: int, user_id: int) -> SocietyAdmin:
+    def assign_admin(self, society_id: int, user_id: int = None, data: dict = None) -> SocietyAdmin:
         society = self.get_by_id(society_id)
-        user = self.user_repo.get_by_id(user_id)
-        if not user:
-            raise NotFoundError("User")
+        
+        user = None
+        if user_id:
+            user = self.user_repo.get_by_id(user_id)
+            if not user:
+                raise NotFoundError("User")
+        elif data and data.get("phone"):
+            phone = data["phone"].strip()
+            user = self.user_repo.get_by_phone(phone)
+            if not user:
+                import bcrypt, secrets
+                name = (data.get("name") or "Society Admin").strip()
+                raw_email = data.get("email")
+                email = raw_email.strip() if isinstance(raw_email, str) and raw_email.strip() else None
+                random_pw = secrets.token_urlsafe(16)
+                pw_hash = bcrypt.hashpw(random_pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+                user = User(
+                    name=name,
+                    phone=phone,
+                    email=email,
+                    password_hash=pw_hash,
+                    role="admin",
+                    status="active"
+                )
+                self.user_repo.save(user)
+                logger.info(f"[SOCIETY] Created new admin user: {user.phone} ({user.name})")
+            else:
+                if user.role != "admin" and not user.is_super_admin:
+                    user.role = "admin"
+                user.status = "active"
+                self.user_repo.save(user)
+        else:
+            raise ValidationError({"admin": "user_id or phone is required"})
 
-        if self.admin_repo.is_admin(society_id, user_id):
+        if self.admin_repo.is_admin(society_id, user.id):
             raise DuplicateEntryError("User is already an admin of this society")
 
-        sa = SocietyAdmin(society_id=society_id, user_id=user_id)
+        sa = SocietyAdmin(society_id=society_id, user_id=user.id)
         self.admin_repo.save(sa)
-        logger.info(f"[SOCIETY] Assigned user {user_id} as admin of society {society_id}")
+        logger.info(f"[SOCIETY] Assigned user {user.id} ({user.phone}) as admin of society {society_id}")
         return sa
 
     def remove_admin(self, society_id: int, user_id: int):
