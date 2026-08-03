@@ -266,7 +266,7 @@ class AuthService:
 
         user = self.user_repo.get_by_email(email_clean)
         if not user:
-            phone_hash = hashlib.md5((google_id or email_clean).encode()).hexdigest()[:8]
+            phone_hash = hashlib.sha256((google_id or email_clean).encode()).hexdigest()[:8]
             unique_phone = f"g_{phone_hash}"
 
             # Check if this phone slug is unique

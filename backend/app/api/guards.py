@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, extract_society_id_from_request
 from app.services.guard_service import GuardService
 from app.utils.response import success, error
 from app.utils.exceptions import AppException
@@ -30,18 +30,7 @@ async def get_all_guards(
     """Admin: list all guards for a society."""
     try:
         guard_service = GuardService(db)
-        header_society_id = request.headers.get("X-Society-ID")
-        target_society_id = society_id or (int(header_society_id) if header_society_id and header_society_id.isdigit() else None)
-        
-        if not target_society_id:
-            auth_header = request.headers.get("Authorization")
-            if auth_header and auth_header.startswith("Bearer "):
-                try:
-                    raw_token = auth_header.split(" ")[1]
-                    payload = jwt.decode(raw_token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
-                    target_society_id = payload.get("active_society_id")
-                except Exception:
-                    pass
+        target_society_id = extract_society_id_from_request(request, society_id)
 
         guards = guard_service.get_all(society_id=target_society_id)
         return success("Guards fetched", data=[g.to_dict() for g in guards])
