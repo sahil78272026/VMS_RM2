@@ -10,7 +10,7 @@ export default function App() {
     visitor_name:'', visitor_phone:'', flat_id:'', entry_mode:'foot', 
     stay_duration:'1_2hr', purpose:'Guest', vehicle_number:'', photo_base64:'' 
   });
-  const [flats, setFlats] = useState<any[]>([]);
+  const [flats, setFlats] = useState<{id: string, flat_number: string}[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCamera, setShowCamera] = useState(false);
@@ -86,8 +86,9 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Check-in failed');
       setStep('done');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      if (err instanceof Error) setError(err.message);
+      else setError('An error occurred');
     } finally {
       setLoading(false);
     }
@@ -129,7 +130,7 @@ export default function App() {
           <p style={{ color: 'var(--text-secondary)' }}>Visitor Self Check-In</p>
         </div>
         
-        {error && <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: 14 }}>{error}</div>}
+        {error && <div role="alert" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: 14 }}>{error}</div>}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           
@@ -150,26 +151,26 @@ export default function App() {
           </div>
 
           <div className="form-group">
-            <label>Your Name</label>
-            <input required placeholder="Full Name" value={form.visitor_name} onChange={e => set('visitor_name')(e.target.value)} />
+            <label htmlFor="visitor_name">Your Name</label>
+            <input id="visitor_name" required placeholder="Full Name" value={form.visitor_name} onChange={e => set('visitor_name')(e.target.value)} />
           </div>
           <div className="form-group">
-            <label>Phone Number</label>
-            <input required type="tel" placeholder="Mobile Number" value={form.visitor_phone} onChange={e => set('visitor_phone')(e.target.value)} />
+            <label htmlFor="visitor_phone">Phone Number</label>
+            <input id="visitor_phone" required type="tel" placeholder="Mobile Number" value={form.visitor_phone} onChange={e => set('visitor_phone')(e.target.value)} />
           </div>
           <div className="form-group">
-            <label>Flat to Visit</label>
-            <select required value={form.flat_id} onChange={e => set('flat_id')(e.target.value)}>
+            <label htmlFor="flat_id">Flat to Visit</label>
+            <select id="flat_id" required value={form.flat_id} onChange={e => set('flat_id')(e.target.value)}>
               <option value="" disabled>Select Flat...</option>
               {flats.map(f => <option key={f.id} value={f.id} style={getFlatStyle(f.flat_number)}>Flat {f.flat_number}</option>)}
             </select>
           </div>
 
-          <div className="form-group">
-            <label>Purpose</label>
+          <div className="form-group" role="group" aria-labelledby="purpose-label">
+            <label id="purpose-label">Purpose</label>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {['Guest','Delivery','Service','Interview'].map(p => (
-                <button key={p} type="button" onClick={() => set('purpose')(p)} className={`btn-pill ${form.purpose === p ? 'active' : ''}`}>
+                <button key={p} type="button" aria-pressed={form.purpose === p} onClick={() => set('purpose')(p)} className={`btn-pill ${form.purpose === p ? 'active' : ''}`}>
                   {p}
                 </button>
               ))}
@@ -177,8 +178,8 @@ export default function App() {
           </div>
 
           <div className="form-group">
-            <label>Arriving by?</label>
-            <select value={form.entry_mode} onChange={e => set('entry_mode')(e.target.value)}>
+            <label htmlFor="entry_mode">Arriving by?</label>
+            <select id="entry_mode" value={form.entry_mode} onChange={e => set('entry_mode')(e.target.value)}>
               <option value="foot">On Foot</option>
               <option value="two_wheeler">Two Wheeler</option>
               <option value="four_wheeler">Four Wheeler (Car)</option>
@@ -187,14 +188,14 @@ export default function App() {
 
           {form.entry_mode !== 'foot' && (
             <div className="form-group">
-              <label>Vehicle Number (Optional)</label>
-              <input placeholder="e.g. KA01AB1234" value={form.vehicle_number} onChange={e => set('vehicle_number')(e.target.value)} />
+              <label htmlFor="vehicle_number">Vehicle Number (Optional)</label>
+              <input id="vehicle_number" placeholder="e.g. KA01AB1234" value={form.vehicle_number} onChange={e => set('vehicle_number')(e.target.value)} />
             </div>
           )}
 
           <div className="form-group">
-            <label>Expected Stay Duration</label>
-            <select value={form.stay_duration} onChange={e => set('stay_duration')(e.target.value)}>
+            <label htmlFor="stay_duration">Expected Stay Duration</label>
+            <select id="stay_duration" value={form.stay_duration} onChange={e => set('stay_duration')(e.target.value)}>
               <option value="30min">Less than 30 mins</option>
               <option value="1_2hr">1-2 Hours</option>
               <option value="half_day">Half Day</option>
@@ -203,7 +204,7 @@ export default function App() {
             </select>
           </div>
 
-          <button type="submit" disabled={loading} className="btn btn-primary w-full" style={{ marginTop: '1rem' }}>
+          <button type="submit" disabled={loading} aria-busy={loading} className="btn btn-primary w-full" style={{ marginTop: '1rem' }}>
             {loading ? 'Submitting...' : 'Submit Request'}
           </button>
         </form>
