@@ -183,6 +183,7 @@ class VisitorLogService:
             stay_duration         = data["stay_duration"],
             expected_exit_gate_id = exit_gate_id,
             status                = "pending",
+            visitor_count         = int(data.get("visitor_count", 1)),
         )
 
         self.log_repo.save(log)
@@ -229,11 +230,12 @@ class VisitorLogService:
         )
 
         # Self check-in enters from society's entry gate
-        entry_gates = self.gate_repo.get_entry_gates(society_id=society_id)
-        if not entry_gates:
-            raise NotFoundError("Entry gate for this society")
-
-        entry_gate_id = entry_gates[0].id
+        entry_gate_id = data.get("gate_id")
+        if not entry_gate_id:
+            entry_gates = self.gate_repo.get_entry_gates(society_id=society_id)
+            if not entry_gates:
+                raise NotFoundError("Entry gate for this society")
+            entry_gate_id = entry_gates[0].id
         exit_gate_id  = self._resolve_exit_gate(entry_gate_id, data["entry_mode"], society_id=society_id)
 
         log = VisitorLog(
@@ -251,6 +253,7 @@ class VisitorLogService:
             stay_duration         = data["stay_duration"],
             expected_exit_gate_id = exit_gate_id,
             status                = "pending",
+            visitor_count         = int(data.get("visitor_count", 1)),
         )
 
         self.log_repo.save(log)

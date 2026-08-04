@@ -388,6 +388,7 @@ class VisitorLog(Base):
         default="pending", nullable=False
     )
     notes                 = Column(Text, nullable=True)
+    visitor_count         = Column(Integer, default=1, nullable=False)
     created_at            = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
@@ -428,6 +429,7 @@ class VisitorLog(Base):
             "exit_confirmed_by":     self.exit_confirmed_by,
             "status":                self.status,
             "notes":                 self.notes,
+            "visitor_count":         self.visitor_count,
             "created_at":            self.created_at.isoformat(),
             "visitor":               self.visitor.to_dict() if self.visitor else None,
             "flat":                  self.flat.to_dict() if self.flat else None,

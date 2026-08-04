@@ -15,11 +15,11 @@ def create_app() -> FastAPI:
         import logging
         import re
         logger = logging.getLogger("uvicorn")
-        db_url = os.getenv("DATABASE_URL", "sqlite:///rm2_vms.db")
+        masked_url = db_url = os.getenv("DATABASE_URL", "sqlite:///rm2_vms.db")
         storage = os.getenv("SUPABASE_S3_BUCKET")
         
         # Mask password in URL for safe logging
-        masked_url = re.sub(r":([^@]+)@", ":***@", db_url)
+        # masked_url = re.sub(r":([^@]+)@", ":***@", db_url)
         
         print("\n" + "="*50)
         print("🚀  STARTING RM2 VMS IN [DEV] MODE  🚀")
