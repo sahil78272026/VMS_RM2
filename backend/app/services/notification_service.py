@@ -83,12 +83,12 @@ class NotificationService:
                 "data": {"url": "rm2vms://resident?tab=dashboard"},
             }
             
-            req = urllib.request.Request(
+            req = urllib.request.Request(  # nosec B310
                 "https://exp.host/--/api/v2/push/send",
                 data=json.dumps(payload).encode('utf-8'),
                 headers={"Accept": "application/json", "Content-Type": "application/json"}
             )
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req) as response:  # nosec B310
                 res_body = response.read()
                 logger.info(f"[PUSH] → user {user_id}: {title} (Expo: {res_body.decode('utf-8')})")
         except Exception as e:

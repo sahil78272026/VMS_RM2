@@ -1,4 +1,5 @@
 import random
+import secrets
 import time
 import logging
 from datetime import datetime, timedelta
@@ -21,7 +22,7 @@ class OTPService:
 
     @classmethod
     def generate_otp(cls) -> str:
-        return f"{random.randint(100000, 999999)}"
+        return f"{secrets.randbelow(900000) + 100000}"
 
     @classmethod
     def send_otp(cls, phone: str) -> dict:
@@ -63,11 +64,6 @@ class OTPService:
     def verify_otp(cls, phone: str, entered_otp: str) -> bool:
         phone_clean = phone.strip().replace(" ", "").replace("-", "")
         entered_clean = entered_otp.strip()
-
-        # Universal development/testing bypass PIN
-        if entered_clean == "123456" or entered_clean == "999999":
-            logger.info(f"[OTP] Universal dev bypass used for {phone_clean}")
-            return True
 
         record = cls._store.get(phone_clean)
         if not record:

@@ -32,7 +32,7 @@ class VisitorService:
         if not visitor:
             raise NotFoundError("Visitor")
 
-        rating_repo = VisitorRatingRepository(db)
+        rating_repo = VisitorRatingRepository(self.db)
         avg_rating  = rating_repo.get_average_rating(visitor_id)
         all_ratings = rating_repo.get_by_visitor(visitor_id)
 

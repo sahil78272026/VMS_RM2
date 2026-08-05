@@ -2,7 +2,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.api.deps import get_current_user, get_active_society_id
+from app.api.deps import get_current_user, get_active_society_id, extract_society_id_from_request
 
 from app.services.maintenance_service import MaintenanceService
 from app.repositories import FlatUserRepository
@@ -63,18 +63,7 @@ async def admin_get_pending(
 ):
     """Admin: get pending UTRs for approval in the active society."""
     try:
-        header_society_id = request.headers.get("X-Society-ID")
-        target_society_id = society_id or (int(header_society_id) if header_society_id and header_society_id.isdigit() else None)
-        
-        if not target_society_id:
-            auth_header = request.headers.get("Authorization")
-            if auth_header and auth_header.startswith("Bearer "):
-                try:
-                    raw_token = auth_header.split(" ")[1]
-                    payload = jwt.decode(raw_token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
-                    target_society_id = payload.get("active_society_id")
-                except Exception:
-                    pass
+        target_society_id = extract_society_id_from_request(request, society_id)
 
         maintenance_service = MaintenanceService(db)
         payments = maintenance_service.admin_get_pending_payments(society_id=target_society_id)
@@ -95,18 +84,7 @@ async def admin_get_flats(
 ):
     """Admin: get all flats and their validity statuses for the active society (paginated)."""
     try:
-        header_society_id = request.headers.get("X-Society-ID")
-        target_society_id = society_id or (int(header_society_id) if header_society_id and header_society_id.isdigit() else None)
-        
-        if not target_society_id:
-            auth_header = request.headers.get("Authorization")
-            if auth_header and auth_header.startswith("Bearer "):
-                try:
-                    raw_token = auth_header.split(" ")[1]
-                    payload = jwt.decode(raw_token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
-                    target_society_id = payload.get("active_society_id")
-                except Exception:
-                    pass
+        target_society_id = extract_society_id_from_request(request, society_id)
 
         maintenance_service = MaintenanceService(db)
         paginated_flats = maintenance_service.admin_get_all_flats(

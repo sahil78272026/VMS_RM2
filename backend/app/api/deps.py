@@ -113,3 +113,25 @@ def require_roles(*allowed_roles: str):
             )
         return user
     return role_checker
+
+from fastapi import Request
+
+def extract_society_id_from_request(request: Request, default_society_id: Optional[int] = None) -> Optional[int]:
+    """
+    Safely extract the target society ID from either the X-Society-ID header
+    or the decoded Authorization bearer token.
+    """
+    header_society_id = request.headers.get("X-Society-ID")
+    target_society_id = default_society_id or (int(header_society_id) if header_society_id and header_society_id.isdigit() else None)
+
+    if not target_society_id:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            try:
+                raw_token = auth_header.split(" ")[1]
+                payload = jwt.decode(raw_token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+                target_society_id = payload.get("active_society_id")
+            except jwt.PyJWTError:
+                pass
+
+    return target_society_id

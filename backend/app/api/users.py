@@ -19,18 +19,7 @@ def get_users(
 ):
     """Fetch users filtered by role, status, and society."""
     try:
-        header_society_id = request.headers.get("X-Society-ID")
-        target_society_id = society_id or (int(header_society_id) if header_society_id and header_society_id.isdigit() else None)
-        
-        if not target_society_id:
-            auth_header = request.headers.get("Authorization")
-            if auth_header and auth_header.startswith("Bearer "):
-                try:
-                    raw_token = auth_header.split(" ")[1]
-                    payload = jwt.decode(raw_token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
-                    target_society_id = payload.get("active_society_id")
-                except Exception:
-                    pass
+        target_society_id = extract_society_id_from_request(request, society_id)
 
         q = db.query(User)
         if role:
