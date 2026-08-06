@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
-const SOCIETY_ID = import.meta.env.VITE_SOCIETY_ID || '7';
-const SOCIETY_NAME = import.meta.env.VITE_SOCIETY_NAME || 'RM2 Residency';
 
 export default function App() {
   const [step, setStep] = useState('form');
-  const [societyId, setSocietyId] = useState(SOCIETY_ID);
+  const [societyId, setSocietyId] = useState<string | null>(null);
   const [gateId, setGateId] = useState<string | null>(null);
+  const [societyDetails, setSocietyDetails] = useState<any>(null);
   
   const [form, setForm] = useState({ 
     visitor_name:'', visitor_phone:'', flat_id:'', entry_mode:'foot', 
@@ -21,9 +20,9 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const getFlatStyle = (flatNumber: string) => {
-    if (flatNumber.endsWith('A')) return { backgroundColor: '#1e3a8a', color: '#93c5fd' }; // Dark Blue bg, Light Blue text
-    if (flatNumber.endsWith('B')) return { backgroundColor: '#14532d', color: '#86efac' }; // Dark Green bg, Light Green text
-    return { backgroundColor: 'var(--bg-secondary)', color: 'white' }; // Default
+    if (flatNumber.endsWith('A')) return { backgroundColor: '#E0F2FE', color: '#0284C7' }; // Light Blue bg, Blue text
+    if (flatNumber.endsWith('B')) return { backgroundColor: '#DCFCE7', color: '#10B981' }; // Light Green bg, Green text
+    return { backgroundColor: 'var(--input-bg)', color: 'var(--text-primary)' }; // Default
   };
 
   const set = (k: string) => (v: string) => setForm(p => ({...p, [k]: v}));
@@ -37,6 +36,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!societyId) return;
+    fetch(`${API_BASE}/societies/${societyId}`)
+      .then(r => r.json())
+      .then(d => setSocietyDetails(d.data || d))
+      .catch(console.error);
+  }, [societyId]);
+
+  useEffect(() => {
+    if (!societyId) return;
     fetch(`${API_BASE}/flats?per_page=5000&society_id=${societyId}`)
       .then(r => r.json())
       .then(d => setFlats(d.data?.items || d.data || []))
@@ -104,10 +112,22 @@ export default function App() {
     }
   };
 
+  if (!societyId) {
+    return (
+      <div className="container min-h-screen flex center">
+        <div className="card text-center animate-fade-in" style={{ width: '100%', maxWidth: 400 }}>
+          <div className="success-icon" style={{ backgroundColor: '#FEE2E2', borderColor: '#EF4444', color: '#EF4444' }}>⚠️</div>
+          <h2 style={{ marginBottom: 8, color: '#EF4444' }}>Invalid QR Code</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>Please scan a valid Gate QR Code to check-in.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (step === 'done') {
     return (
       <div className="container min-h-screen flex center">
-        <div className="glass card text-center animate-fade-in" style={{ width: '100%', maxWidth: 400 }}>
+        <div className="card text-center animate-fade-in" style={{ width: '100%', maxWidth: 400 }}>
           <div className="success-icon">✓</div>
           <h2 style={{ marginBottom: 8 }}>Request Submitted!</h2>
           <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>The resident has been notified. Please wait at the gate.</p>
@@ -144,12 +164,19 @@ export default function App() {
       )}
 
       <div className="container min-h-screen flex center">
-        <div className="card glass animate-fade-in" style={{ width: '100%', maxWidth: 440, margin: '2rem 0' }}>
+        <div className="card animate-fade-in" style={{ width: '100%', maxWidth: 440, margin: '2rem 0' }}>
 
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>📱</div>
-          <h1 style={{ fontSize: 24, marginBottom: 8 }}>{SOCIETY_NAME}</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Visitor Self Check-In</p>
+          <div style={{
+            width: 64, height: 64, borderRadius: 16, backgroundColor: 'white',
+            border: '1.5px solid var(--accent)', margin: '0 auto 16px auto', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
+          }}>
+            <span style={{ fontSize: 32 }}>🏢</span>
+          </div>
+          <h1 style={{ fontSize: 24, marginBottom: 4 }}>{societyDetails?.name || 'Loading Society...'}</h1>
+          {societyDetails?.city && <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{societyDetails.city}</p>}
+          <p style={{ color: 'var(--text-secondary)', marginTop: 8, fontWeight: 600 }}>Visitor Self Check-In</p>
         </div>
         
         {error && <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: 14 }}>{error}</div>}
@@ -160,9 +187,9 @@ export default function App() {
             <label>Visitor Photo</label>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
               {form.photo_base64 ? (
-                <img src={form.photo_base64} alt="Visitor" style={{ width: 120, height: 120, borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--accent)' }} />
+                <img src={form.photo_base64} alt="Visitor" style={{ width: 120, height: 120, borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--accent)', boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)' }} />
               ) : (
-                <div style={{ width: 120, height: 120, borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.05)', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>
+                <div style={{ width: 120, height: 120, borderRadius: '50%', backgroundColor: 'var(--bg-secondary)', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>
                   📷
                 </div>
               )}
