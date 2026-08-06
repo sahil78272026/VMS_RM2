@@ -183,7 +183,7 @@ export function AdminDashboard({ navigation }: any) {
   };
 
   const createGuard = async () => {
-    if (!form.name || !form.phone || !form.employee_id || !form.password) {
+    if (!form.name || !form.phone || !form.employee_id) {
       return Alert.alert('Error', 'Please fill all required guard details');
     }
     try {
@@ -844,7 +844,7 @@ export function AdminDashboard({ navigation }: any) {
 
       {/* ── Add Guard Modal ── */}
       {modal === 'add_guard' && (
-        <Modal title="Register Security Guard" subtitle="Create login credentials for guard terminal" onClose={() => setModal(null)}>
+        <Modal title="Register Security Guard" subtitle="Register a new guard profile" onClose={() => setModal(null)}>
           <Input
             label="Guard Full Name *"
             placeholder="e.g. Suraj Singh"
@@ -862,13 +862,6 @@ export function AdminDashboard({ navigation }: any) {
             placeholder="e.g. SEC-001"
             value={form?.employee_id || ''}
             onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), employee_id: v }))}
-          />
-          <Input
-            label="Login Password *"
-            type="password"
-            placeholder="Minimum 6 characters"
-            value={form?.password || ''}
-            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), password: v }))}
           />
           <Select
             label="Duty Shift"

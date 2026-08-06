@@ -94,6 +94,7 @@ export function GuardDashboard({ navigation }: any) {
   const [flats, setFlats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedQrGateId, setSelectedQrGateId] = useState<number | null>(null);
   
   // Fast Passcode Lookup
   const [passcode, setPasscode] = useState('');
@@ -662,7 +663,58 @@ export function GuardDashboard({ navigation }: any) {
     }
 
     if (currentTab === 'qr') {
-      const qrUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://vmsrm2.netlify.app';
+      const baseUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://vmsrm2.netlify.app';
+
+      if (!selectedQrGateId) {
+        return (
+          <View style={{ padding: 20 }}>
+            <View style={{
+              backgroundColor: Warm.amberDim,
+              borderColor: Warm.amber + '44',
+              borderWidth: 1,
+              padding: 16,
+              borderRadius: 18,
+              marginBottom: 18,
+            }}>
+              <Text style={{ color: '#B45309', fontWeight: '800', fontSize: 15, marginBottom: 12, textAlign: 'center' }}>
+                ⚠️ Select Gate for QR Check-in
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
+                {gates.map((g: any) => (
+                  <TouchableOpacity
+                    key={g.id}
+                    onPress={() => setSelectedQrGateId(g.id)}
+                    style={{
+                      flex: 1,
+                      minWidth: '45%',
+                      backgroundColor: '#FFFFFF',
+                      borderColor: Warm.amber,
+                      borderWidth: 1.5,
+                      borderRadius: 16,
+                      padding: 16,
+                      alignItems: 'center',
+                      ...Warm.shadow,
+                    }}
+                  >
+                    <Text style={{ fontSize: 28, marginBottom: 8 }}>{g.type === 'exit' ? '🚪' : '⛩️'}</Text>
+                    <Text style={{ color: Warm.text, fontWeight: '800', fontSize: 14, textAlign: 'center' }}>{g.name}</Text>
+                    <Text style={{ color: Warm.amber, fontWeight: '800', fontSize: 11, marginTop: 6, textTransform: 'uppercase' }}>Generate QR</Text>
+                  </TouchableOpacity>
+                ))}
+                {gates.length === 0 && (
+                  <Text style={{ color: '#B45309', fontSize: 13, textAlign: 'center', marginVertical: 10 }}>
+                    No gates found for this society. Contact admin.
+                  </Text>
+                )}
+              </View>
+            </View>
+          </View>
+        );
+      }
+
+      const selectedGate = gates.find(g => g.id === selectedQrGateId);
+      const qrUrl = `${baseUrl}?society_id=${activeSocietyId}&gate_id=${selectedQrGateId}`;
+      
       return (
         <View style={{ alignItems: 'center', padding: 20 }}>
           <View style={{
@@ -675,8 +727,18 @@ export function GuardDashboard({ navigation }: any) {
             width: '100%',
             ...Warm.shadow,
           }}>
+            <TouchableOpacity 
+              onPress={() => setSelectedQrGateId(null)}
+              style={{ alignSelf: 'flex-start', marginBottom: 16 }}
+            >
+              <Text style={{ color: Warm.amber, fontWeight: '700' }}>← Change Gate</Text>
+            </TouchableOpacity>
+
             <Text style={{ fontSize: 20, fontWeight: '800', color: Warm.text, marginBottom: 6, textAlign: 'center' }}>
-              Self Check-In QR Code
+              Self Check-In QR
+            </Text>
+            <Text style={{ color: Warm.text, fontWeight: '800', fontSize: 14, marginBottom: 6 }}>
+              {selectedGate?.name || 'Gate'}
             </Text>
             <Text style={{ color: Warm.textMuted, marginBottom: 24, textAlign: 'center', fontSize: 13 }}>
               Visitors can scan this QR code on their phone to complete quick check-in.
