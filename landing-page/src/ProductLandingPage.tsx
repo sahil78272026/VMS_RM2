@@ -8,7 +8,7 @@ export default function ProductLandingPage() {
           <div style={{ fontSize: '28px' }}>🏢</div>
           <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 900, color: '#0284C7', letterSpacing: '-0.5px' }}>RM2 Secure</h1>
         </div>
-        <a href="https://drive.google.com/uc?export=download&id=1VFvgeK5n8dokryaiy_DHZqFl5FbxUnVF" target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#0284C7', color: '#FFFFFF', padding: '12px 24px', borderRadius: '12px', textDecoration: 'none', fontWeight: 700, transition: '0.2s', boxShadow: '0 4px 6px -1px rgba(2, 132, 199, 0.2)' }}>Download App</a>
+        <a href="https://drive.google.com/file/d/1lLW1T3vpFsQthcmpEpbaGIOhmpkitaMH" target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#0284C7', color: '#FFFFFF', padding: '12px 24px', borderRadius: '12px', textDecoration: 'none', fontWeight: 700, transition: '0.2s', boxShadow: '0 4px 6px -1px rgba(2, 132, 199, 0.2)' }}>Download App</a>
       </header>
 
       {/* Hero */}
@@ -36,7 +36,7 @@ export default function ProductLandingPage() {
       <section style={{ padding: '100px 20px', backgroundColor: '#FFFFFF' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
           <h3 style={{ fontSize: '36px', fontWeight: 900, textAlign: 'center', marginBottom: '64px', color: '#0F172A', letterSpacing: '-1px' }}>Built for the Modern Community</h3>
-          
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '32px' }}>
             <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', padding: '40px', borderRadius: '24px', transition: 'transform 0.3s' }}>
               <div style={{ fontSize: '48px', marginBottom: '24px', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.1))' }}>📱</div>
