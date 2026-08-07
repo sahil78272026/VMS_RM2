@@ -507,9 +507,10 @@ export function SuperAdminScreen() {
                   <Input
                     label="10-Digit Mobile Number (OTP Login) *"
                     placeholder="e.g. 9876543210"
-                    keyboardType="phone-pad"
+                    keyboardType="number-pad"
+                    maxLength={10}
                     value={adminForm.phone}
-                    onChange={(v: string) => setAdminForm({ ...adminForm, phone: v })}
+                    onChange={(v: string) => setAdminForm({ ...adminForm, phone: v.replace(/[^0-9]/g, '') })}
                   />
                   <Input
                     label="Email Address (Optional)"
@@ -623,10 +624,10 @@ export function SuperAdminScreen() {
               {generatedResult.type === 'tower' && (
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Input label="Total Floors" value={patternConfig.floors} onChange={(v: string) => setPatternConfig((p: any) => ({...p, floors: v}))} keyboardType="number-pad" />
+                    <Input label="Total Floors" value={patternConfig.floors} onChange={(v: string) => setPatternConfig((p: any) => ({ ...p, floors: v }))} keyboardType="number-pad" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Input label="Flats per Floor" value={patternConfig.units_per_floor} onChange={(v: string) => setPatternConfig((p: any) => ({...p, units_per_floor: v}))} keyboardType="number-pad" />
+                    <Input label="Flats per Floor" value={patternConfig.units_per_floor} onChange={(v: string) => setPatternConfig((p: any) => ({ ...p, units_per_floor: v }))} keyboardType="number-pad" />
                   </View>
                 </View>
               )}
@@ -634,10 +635,10 @@ export function SuperAdminScreen() {
               {generatedResult.type === 'subunit' && (
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Input label="Start Number" value={patternConfig.start_num} onChange={(v: string) => setPatternConfig((p: any) => ({...p, start_num: v}))} keyboardType="number-pad" />
+                    <Input label="Start Number" value={patternConfig.start_num} onChange={(v: string) => setPatternConfig((p: any) => ({ ...p, start_num: v }))} keyboardType="number-pad" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Input label="End Number" value={patternConfig.end_num} onChange={(v: string) => setPatternConfig((p: any) => ({...p, end_num: v}))} keyboardType="number-pad" />
+                    <Input label="End Number" value={patternConfig.end_num} onChange={(v: string) => setPatternConfig((p: any) => ({ ...p, end_num: v }))} keyboardType="number-pad" />
                   </View>
                 </View>
               )}
@@ -645,13 +646,13 @@ export function SuperAdminScreen() {
               {generatedResult.type === 'slash' && (
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <View style={{ flex: 1 }}>
-                    <Input label="Start Block" value={patternConfig.start_base} onChange={(v: string) => setPatternConfig((p: any) => ({...p, start_base: v}))} keyboardType="number-pad" />
+                    <Input label="Start Block" value={patternConfig.start_base} onChange={(v: string) => setPatternConfig((p: any) => ({ ...p, start_base: v }))} keyboardType="number-pad" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Input label="End Block" value={patternConfig.end_base} onChange={(v: string) => setPatternConfig((p: any) => ({...p, end_base: v}))} keyboardType="number-pad" />
+                    <Input label="End Block" value={patternConfig.end_base} onChange={(v: string) => setPatternConfig((p: any) => ({ ...p, end_base: v }))} keyboardType="number-pad" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Input label="Flats/Block" value={patternConfig.units_per_base} onChange={(v: string) => setPatternConfig((p: any) => ({...p, units_per_base: v}))} keyboardType="number-pad" />
+                    <Input label="Flats/Block" value={patternConfig.units_per_base} onChange={(v: string) => setPatternConfig((p: any) => ({ ...p, units_per_base: v }))} keyboardType="number-pad" />
                   </View>
                 </View>
               )}

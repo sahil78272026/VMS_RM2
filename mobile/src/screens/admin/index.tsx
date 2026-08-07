@@ -3,7 +3,7 @@ import { View, Text, Alert, ScrollView, BackHandler, PanResponder, Dimensions, A
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { T, Card, Btn, StatCard, EmptyState, LoadingScreen, Tabs, Avatar, Badge, Input, Select, Modal, SocietySwitcher } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
-import { UserService, FlatUserService, GuardService, FlatService, MaintenanceService } from '../../services';
+import { UserService, FlatUserService, GuardService, FlatService, MaintenanceService, AmenityService } from '../../services';
 export { SuperAdminScreen } from './SuperAdminScreen';
 
 const { width } = Dimensions.get('window');
@@ -39,7 +39,7 @@ export function AdminDashboard({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { user, logout, activeSociety, activeSocietyId } = useAuth();
   const [currentTab, setCurrentTab] = useState('dashboard');
-  const tabOrder = ['dashboard', 'residents', 'maintenance', 'guards', 'profile'];
+  const tabOrder = ['dashboard', 'residents', 'maintenance', 'guards', 'services', 'profile'];
   const currentTabRef = useRef(currentTab);
   currentTabRef.current = currentTab;
 
@@ -93,6 +93,7 @@ export function AdminDashboard({ navigation }: any) {
   const [activeResidents, setActiveResidents] = useState<any[]>([]);
   const [pendingPayments, setPendingPayments] = useState<any[]>([]);
   const [maintenanceFlats, setMaintenanceFlats] = useState<any[]>([]);
+  const [services, setServices] = useState<any[]>([]);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [flatPage, setFlatPage] = useState(1);
@@ -130,18 +131,20 @@ export function AdminDashboard({ navigation }: any) {
 
   const load = useCallback(async () => {
     try {
-      const [fr, gr, pr, ar, p_pay] = await Promise.all([
+      const [fr, gr, pr, ar, p_pay, srv] = await Promise.all([
         FlatService.getAll({ per_page: 5000, society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
         GuardService.getAll({ society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
         UserService.getAll({ role: 'resident', status: 'pending_verification', society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
         UserService.getAll({ role: 'resident', status: 'active', society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
         MaintenanceService.getPending({ society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
+        AmenityService.getAll({ society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
       ]);
       setFlats(fr.data?.data?.items || fr.data?.data || []);
       setGuards(gr.data?.data?.items || gr.data?.data || []);
       setPendingResidents(pr.data?.data?.items || pr.data?.data || []);
       setActiveResidents(ar.data?.data?.items || ar.data?.data || []);
       setPendingPayments(p_pay.data?.data || []);
+      setServices(srv.data?.data || []);
     } catch {}
     setLoading(false);
   }, [activeSocietyId]);
@@ -214,6 +217,26 @@ export function AdminDashboard({ navigation }: any) {
       load();
     } catch (err: any) {
       Alert.alert('Error', 'Failed to reject payment');
+    }
+  };
+
+    const createService = async () => {
+    if (!form.name) return Alert.alert('Error', 'Please enter a name for the amenity/service');
+    try {
+      await AmenityService.create({
+        name: form.name,
+        category: form.category || 'facility',
+        description: form.description || null,
+        contact_info: form.contact_info || null,
+        timing: form.timing || null,
+        status: form.status || 'active'
+      }, activeSocietyId);
+      Alert.alert('Success', 'Service created successfully.');
+      setModal(null);
+      setForm({});
+      load();
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.message || 'Failed to create service');
     }
   };
 
@@ -698,8 +721,48 @@ export function AdminDashboard({ navigation }: any) {
       );
     }
 
-    if (currentTab === 'profile') {
+    if (currentTab === 'services') {
       return (
+        <View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: Warm.text }}>Society Amenities</Text>
+            <TouchableOpacity
+              onPress={() => { setForm({ category: 'facility', status: 'active' }); setModal('add_service'); }}
+              style={{ backgroundColor: Warm.accent, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12 }}
+            >
+              <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 12 }}>+ Add New</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {services.length === 0 && (
+            <EmptyState icon="🛠️" title="No Services Added" message="Start adding society amenities and contacts." />
+          )}
+
+          {services.map((s: any) => (
+            <View key={s.id} style={{
+              backgroundColor: Warm.cardBg, borderColor: Warm.cardBorder, borderWidth: 1,
+              borderRadius: 16, padding: 16, marginBottom: 10, ...Warm.shadow,
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 16 }}>{s.name}</Text>
+                  {s.description && <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 4 }}>{s.description}</Text>}
+                  {s.contact_info && <Text style={{ color: Warm.accent, fontSize: 12, marginTop: 4, fontWeight: '600' }}>📞 {s.contact_info}</Text>}
+                  {s.timing && <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>🕒 {s.timing}</Text>}
+                </View>
+                <View style={{ backgroundColor: s.status === 'active' ? Warm.greenDim : Warm.redDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                  <Text style={{ color: s.status === 'active' ? Warm.green : Warm.red, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' }}>
+                    {s.status}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    if (currentTab === 'profile') {      return (
         <View>
           <View style={{
             backgroundColor: Warm.cardBg,
@@ -750,18 +813,21 @@ export function AdminDashboard({ navigation }: any) {
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <SocietySwitcher theme="warm" />
-          {user?.role === 'super_admin' ? (
-            <TouchableOpacity
-              onPress={() => navigation?.navigate('SuperAdmin')}
-              style={{ backgroundColor: Warm.accentDim, borderColor: Warm.accent + '66', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}
-            >
-              <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 11 }}>← PLATFORM ADMIN</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            {user?.role === 'super_admin' ? (
+              <TouchableOpacity
+                onPress={() => navigation?.navigate('SuperAdmin')}
+                style={{ backgroundColor: Warm.accentDim, borderColor: Warm.accent + '66', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}
+              >
+                <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 11 }}>← PLATFORM ADMIN</Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity onPress={() => setCurrentTab('profile')} style={{
+              shadowColor: '#4A3E3D', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4,
+            }}>
+              <Avatar name={user?.name || '?'} size={34} color={Warm.accent} />
             </TouchableOpacity>
-          ) : (
-            <View style={{ backgroundColor: Warm.accentDim, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 }}>
-              <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 11 }}>ADMIN CONSOLE</Text>
-            </View>
-          )}
+          </View>
         </View>
       </View>
 
@@ -813,7 +879,7 @@ export function AdminDashboard({ navigation }: any) {
           { id: 'residents', label: 'Residents', icon: '👥' },
           { id: 'maintenance', label: 'Dues', icon: '💰' },
           { id: 'guards', label: 'Guards', icon: '🛡️' },
-          { id: 'profile', label: 'Profile', icon: '👤' },
+          { id: 'services', label: 'Services', icon: '🛠️' },
         ].map((tab) => {
           const isAct = currentTab === tab.id;
           return (
@@ -854,8 +920,10 @@ export function AdminDashboard({ navigation }: any) {
           <Input
             label="Phone Number *"
             placeholder="98765 43210"
+            maxLength={10}
+            keyboardType="number-pad"
             value={form?.phone || ''}
-            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), phone: v }))}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), phone: v.replace(/[^0-9]/g, '') }))}
           />
           <Input
             label="Employee ID *"
@@ -874,6 +942,51 @@ export function AdminDashboard({ navigation }: any) {
           />
           <Btn full variant="green" onClick={createGuard} style={{ marginTop: 12 }}>
             Register Guard Account →
+          </Btn>
+        </Modal>
+      )}
+
+      {/* ── Add Service Modal ── */}
+      {modal === 'add_service' && (
+        <Modal title="Add Society Amenity" subtitle="Register a facility or service contact" onClose={() => setModal(null)}>
+          <Input
+            label="Contact Name / Service Provider *"
+            placeholder="Name"
+            value={form?.name || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), name: v }))}
+          />
+          <Select
+            label="Service Type *"
+            value={form?.category || 'Plumber'}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), category: v }))}
+            options={[
+              { value: 'Electrician', label: 'Electrician' },
+              { value: 'Plumber', label: 'Plumber' },
+              { value: 'Carpenter', label: 'Carpenter' },
+              { value: 'Maid / Cleaner', label: 'Maid / Cleaner' },
+              { value: 'Other', label: 'Other' },
+            ]}
+          />
+          <Input
+            label="Contact Info (Optional)"
+            placeholder="Phone or Email"
+            value={form?.contact_info || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), contact_info: v }))}
+          />
+          <Input
+            label="Timings (Optional)"
+            placeholder="e.g. 06:00 AM - 10:00 PM"
+            value={form?.timing || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), timing: v }))}
+          />
+          <Input
+            label="Description (Optional)"
+            placeholder="Any extra details"
+            value={form?.description || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), description: v }))}
+          />
+          <Btn full variant="green" onClick={createService} style={{ marginTop: 12 }}>
+            Save Amenity →
           </Btn>
         </Modal>
       )}

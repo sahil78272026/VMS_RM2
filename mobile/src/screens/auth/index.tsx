@@ -144,9 +144,9 @@ export function LoginScreen({ navigation }: any) {
 
   const handleSendOtp = async () => {
     setErrorMsg(null);
-    const cleanPhone = phone.trim().replace(/\s+/g, '');
-    if (!cleanPhone || cleanPhone.length < 10) {
-      setErrorMsg('Please enter a valid 10-digit mobile number.');
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    if (cleanPhone.length !== 10) {
+      setErrorMsg('Mobile number must be exactly 10 digits.');
       return;
     }
     setLoading(true);
@@ -167,7 +167,7 @@ export function LoginScreen({ navigation }: any) {
 
   const handleVerifyOtp = async () => {
     setErrorMsg(null);
-    const cleanPhone = phone.trim().replace(/\s+/g, '');
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
     const cleanOtp = otp.trim();
     if (!cleanOtp || cleanOtp.length < 6) {
       setErrorMsg('Please enter the complete 6-digit OTP code.');
@@ -252,15 +252,16 @@ export function LoginScreen({ navigation }: any) {
 
           <Input
             label="Mobile Number"
-            placeholder="e.g. 98765 43210"
+            placeholder="e.g. 9876543210"
+            maxLength={10}
+            keyboardType="number-pad"
             value={phone}
             onChange={(v: string) => {
-              setPhone(v);
+              const numericValue = v.replace(/[^0-9]/g, '');
+              setPhone(numericValue);
               setErrorMsg(null);
             }}
             icon="📞"
-            keyboardType="phone-pad"
-            maxLength={13}
           />
 
           <Btn
@@ -470,6 +471,40 @@ export function RegisterScreen({ navigation, route }: any) {
       subtitle="Complete your profile to access your flat"
       scroll={true}
     >
+      {/* Beautiful New Resident Welcome Banner */}
+      <View style={{
+        backgroundColor: '#E0F2FE',
+        borderColor: '#BAE6FD',
+        borderWidth: 1,
+        borderRadius: 16,
+        padding: 20,
+        marginBottom: 20,
+        alignItems: 'center',
+        shadowColor: '#0284C7',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+      }}>
+        <View style={{
+          backgroundColor: '#FFFFFF',
+          paddingHorizontal: 12,
+          paddingVertical: 4,
+          borderRadius: 20,
+          marginBottom: 12,
+        }}>
+          <Text style={{ color: '#0284C7', fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>
+            👋 NEW RESIDENT?
+          </Text>
+        </View>
+        
+        <Text style={{ fontSize: 18, fontWeight: '700', color: '#0F172A', textAlign: 'center', marginBottom: 4 }}>
+          Welcome to RM2 Secure!
+        </Text>
+        <Text style={{ fontSize: 13, color: '#475569', textAlign: 'center', lineHeight: 20 }}>
+          Please fill in your society and flat details below to complete your onboarding and unlock your gate access.
+        </Text>
+      </View>
+
       {/* Inline Error Banner */}
       {errorMsg ? (
         <View style={{

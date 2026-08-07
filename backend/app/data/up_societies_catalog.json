@@ -1,0 +1,66 @@
+[
+    {
+        "name": "Supertech Capetown",
+        "city": "Noida",
+        "address": "Sector 74, Noida",
+        "promoter": "Supertech Ltd",
+        "slug": "supertech-capetown",
+        "source": "UP_RERA"
+    },
+    {
+        "name": "Gaur City 2",
+        "city": "Greater Noida West",
+        "address": "Sector 16C, Gr. Noida",
+        "promoter": "Gaursons",
+        "slug": "gaur-city-2",
+        "source": "UP_RERA"
+    },
+    {
+        "name": "ATS Village",
+        "city": "Noida",
+        "address": "Sector 93A, Noida",
+        "promoter": "ATS Infrastructure",
+        "slug": "ats-village",
+        "source": "UP_RERA"
+    },
+    {
+        "name": "Omaxe Heights",
+        "city": "Lucknow",
+        "address": "Gomti Nagar, Lucknow",
+        "promoter": "Omaxe Ltd",
+        "slug": "omaxe-heights",
+        "source": "UP_RERA"
+    },
+    {
+        "name": "Cleo County",
+        "city": "Noida",
+        "address": "Sector 121, Noida",
+        "promoter": "ABA Corp",
+        "slug": "cleo-county",
+        "source": "UP_RERA"
+    },
+    {
+        "name": "Jaypee Greens Pavilion Court",
+        "city": "Noida",
+        "address": "Sector 128, Noida",
+        "promoter": "Jaypee Group",
+        "slug": "jaypee-greens",
+        "source": "UP_RERA"
+    },
+    {
+        "name": "Mahagun Moderne",
+        "city": "Noida",
+        "address": "Sector 78, Noida",
+        "promoter": "Mahagun Group",
+        "slug": "mahagun-moderne",
+        "source": "UP_RERA"
+    },
+    {
+        "name": "Eldeco Aamantran",
+        "city": "Noida",
+        "address": "Sector 119, Noida",
+        "promoter": "Eldeco Group",
+        "slug": "eldeco-aamantran",
+        "source": "UP_RERA"
+    }
+]

@@ -44,6 +44,7 @@ class Society(Base):
     notifications        = relationship("Notification", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
     flat_users           = relationship("FlatUser", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
     society_admins       = relationship("SocietyAdmin", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    amenities            = relationship("Amenity", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
 
     def to_dict(self):
         return {
@@ -769,4 +770,36 @@ class Announcement(Base):
             "attachment_url": self.attachment_url,
             "created_at":     self.created_at.isoformat(),
             "expires_at":     self.expires_at.isoformat() if self.expires_at else None,
+        }
+
+
+# ── 16. Amenities ────────────────────────────────────────────────────────
+
+class Amenity(Base):
+    __tablename__ = "amenities"
+
+    id          = Column(Integer, primary_key=True)
+    society_id  = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
+    name        = Column(String(100), nullable=False)
+    category    = Column(String(50), default="Service", nullable=False)
+    description = Column(Text, nullable=True)
+    contact_info = Column(String(200), nullable=True)
+    timing      = Column(String(100), nullable=True)
+    status      = Column(Enum("active", "inactive", name="amenity_status"), default="active", nullable=False)
+    created_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    society     = relationship("Society", back_populates="amenities")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "society_id": self.society_id,
+            "name": self.name,
+            "category": self.category,
+            "description": self.description,
+            "contact_info": self.contact_info,
+            "timing": self.timing,
+            "status": self.status,
+            "created_at": self.created_at.isoformat()
         }

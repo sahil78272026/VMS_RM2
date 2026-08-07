@@ -531,8 +531,10 @@ export function GuardDashboard({ navigation }: any) {
             <Input
               label="Phone Number *"
               placeholder="98765 43210"
+              maxLength={10}
+              keyboardType="number-pad"
               value={form.visitor_phone || ''}
-              onChange={(v: string) => setForm({ ...form, visitor_phone: v })}
+              onChange={(v: string) => setForm({ ...form, visitor_phone: v.replace(/[^0-9]/g, '') })}
               icon="📞"
             />
             <Select

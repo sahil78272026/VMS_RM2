@@ -133,3 +133,8 @@ export const AnnouncementService = {
 export const UserService = {
   getAll: (p?: any) => api.get('/users', { params: p }),
 };
+
+export const AmenityService = {
+  getAll: (p?: any) => api.get('/amenities', { params: p }),
+  create: (d: any, society_id: string | number) => api.post(`/amenities?society_id=${society_id}`, d),
+};

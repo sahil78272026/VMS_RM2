@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, Text, Alert, TouchableOpacity, ScrollView, Image, BackHandler, Linking, PanResponder, Dimensions, Animated, StyleSheet, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { VisitorLogService, PreApprovalService, FrequentPassService, MaintenanceService, AnnouncementService, FlatUserService } from '../../services';
+import { VisitorLogService, PreApprovalService, FrequentPassService, MaintenanceService, AnnouncementService, FlatUserService, AmenityService } from '../../services';
 import { T, Card, Badge, Avatar, Btn, Input, Select, PageLayout, StatCard, EmptyState, LoadingScreen, Modal, Tabs, Calendar, SocietySwitcher, QuickActionTile } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
 import { BASE_URL } from '../../services/api';
@@ -41,7 +41,7 @@ export function ResidentDashboard({ route }: any) {
   const { user, logout, activeSociety, activeSocietyId } = useAuth();
   const [currentTab, setCurrentTab] = useState(route?.params?.tab || 'dashboard');
 
-  const tabOrder = ['dashboard', 'history', 'passes', 'bills', 'profile'];
+  const tabOrder = ['dashboard', 'history', 'passes', 'bills', 'services', 'profile'];
   const currentTabRef = useRef(currentTab);
   currentTabRef.current = currentTab;
 
@@ -97,6 +97,7 @@ export function ResidentDashboard({ route }: any) {
   const [preApprovals, setPreApprovals] = useState<any[]>([]);
   const [pendingFamily, setPendingFamily] = useState<any[]>([]);
   const [myFlatUser, setMyFlatUser] = useState<any>(null);
+  const [services, setServices] = useState<any[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<any>(null);
@@ -109,7 +110,7 @@ export function ResidentDashboard({ route }: any) {
       return;
     }
     try {
-      const [pr, lr, br, ar, par, fpr, pfr, myfr] = await Promise.all([
+      const [pr, lr, br, ar, par, fpr, pfr, myfr, srv] = await Promise.all([
         VisitorLogService.getMyPending().catch(() => ({ data: { data: [] } })),
         VisitorLogService.getMyLogs({ per_page: 20 }).catch(() => ({ data: { data: [] } })),
         MaintenanceService.getMy().catch(() => ({ data: { data: { payments: [] } } })),
@@ -118,6 +119,7 @@ export function ResidentDashboard({ route }: any) {
         FrequentPassService.getMy().catch(() => ({ data: { data: [] } })),
         FlatUserService.getPendingFamily().catch(() => ({ data: { data: [] } })),
         FlatUserService.getMyFlat().catch(() => ({ data: { data: [] } })),
+        AmenityService.getAll({ society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
       ]);
       setPending(pr.data?.data || []);
       setLogs(lr.data?.data?.items || lr.data?.data || []);
@@ -130,6 +132,7 @@ export function ResidentDashboard({ route }: any) {
       const allMembers = myfr?.data?.data || [];
       const me = allMembers.find((m: any) => m.user_id === user?.id);
       setMyFlatUser(me || null);
+      setServices(srv.data?.data || []);
     } catch {}
     setLoading(false);
   }, [activeSocietyId]);
@@ -793,6 +796,60 @@ export function ResidentDashboard({ route }: any) {
       );
     }
 
+    if (currentTab === 'services') {
+      return (
+        <View>
+          <View style={{ marginBottom: 18 }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: Warm.text }}>Society Amenities</Text>
+            <Text style={{ fontSize: 12, color: Warm.textMuted, marginTop: 4 }}>
+              Facilities and key service contacts authorized by your society.
+            </Text>
+          </View>
+          
+          {services.length === 0 && (
+            <EmptyState icon="🛠️" title="No Services Listed" message="Your society admin hasn't added any services yet." />
+          )}
+
+          {services.map((s: any) => (
+            <View key={s.id} style={{
+              backgroundColor: Warm.cardBg, borderColor: Warm.cardBorder, borderWidth: 1,
+              borderRadius: 16, padding: 16, marginBottom: 10, ...Warm.shadow,
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 16 }}>{s.name}</Text>
+                  {s.description && <Text style={{ color: Warm.textMuted, fontSize: 13, marginTop: 4, lineHeight: 18 }}>{s.description}</Text>}
+                  
+                  <View style={{ marginTop: 10, gap: 4 }}>
+                    {s.contact_info && (
+                      <TouchableOpacity 
+                        onPress={() => Linking.openURL(`tel:${s.contact_info}`)}
+                        style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Warm.accent, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, marginTop: 6, alignSelf: 'flex-start' }}
+                      >
+                        <Text style={{ fontSize: 14, marginRight: 8, color: '#FFFFFF' }}>📞</Text>
+                        <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>Call {s.contact_info}</Text>
+                      </TouchableOpacity>
+                    )}
+                    {s.timing && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 13, marginRight: 6 }}>🕒</Text>
+                        <Text style={{ color: Warm.textMuted, fontSize: 12, fontWeight: '600' }}>{s.timing}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                <View style={{ backgroundColor: Warm.amberDim, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>
+                  <Text style={{ color: '#B45309', fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    🛠️ {s.category || 'Service'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
     if (currentTab === 'profile') {
       return (
         <View>
@@ -1044,7 +1101,7 @@ export function ResidentDashboard({ route }: any) {
           { id: 'history', label: 'Visitors', icon: '👥' },
           { id: 'passes', label: 'Passes', icon: '🎫' },
           { id: 'bills', label: 'Dues', icon: '💰' },
-          { id: 'profile', label: 'Profile', icon: '👤' },
+          { id: 'services', label: 'Services', icon: '🛠️' },
         ].map((tab) => {
           const isAct = currentTab === tab.id;
           return (
@@ -1165,8 +1222,10 @@ export function ResidentDashboard({ route }: any) {
           <Input
             label="Visitor Phone Number"
             placeholder={form?.purpose === 'Guest' ? '98765 43210 (Recommended)' : 'Phone number (Optional)'}
+            maxLength={10}
+            keyboardType="number-pad"
             value={form?.visitor_phone || ''}
-            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), visitor_phone: v }))}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), visitor_phone: v.replace(/[^0-9]/g, '') }))}
           />
           <Text style={{ color: Warm.text, fontWeight: '700', fontSize: 14, marginTop: 12, marginBottom: 4 }}>
             Valid Until Date *

@@ -2,16 +2,24 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
+import ProductLandingPage from './ProductLandingPage';
+
 export default function App() {
+  const params = new URLSearchParams(window.location.search);
+  const initialSocietyId = params.get('society_id');
+  const initialGateId = params.get('gate_id');
+
   const [step, setStep] = useState('form');
-  const [societyId, setSocietyId] = useState<string | null>(null);
-  const [gateId, setGateId] = useState<string | null>(null);
+  const [societyId] = useState<string | null>(initialSocietyId);
+  const [gateId] = useState<string | null>(initialGateId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [societyDetails, setSocietyDetails] = useState<any>(null);
   
   const [form, setForm] = useState({ 
     visitor_name:'', visitor_phone:'', flat_id:'', entry_mode:'foot', 
     stay_duration:'1_2hr', purpose:'Guest', vehicle_number:'', photo_base64:'', visitor_count: '1'
   });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [flats, setFlats] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -27,13 +35,6 @@ export default function App() {
 
   const set = (k: string) => (v: string) => setForm(p => ({...p, [k]: v}));
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const s_id = params.get('society_id');
-    const g_id = params.get('gate_id');
-    if (s_id) setSocietyId(s_id);
-    if (g_id) setGateId(g_id);
-  }, []);
 
   useEffect(() => {
     if (!societyId) return;
@@ -105,6 +106,7 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Check-in failed');
       setStep('done');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -113,15 +115,7 @@ export default function App() {
   };
 
   if (!societyId) {
-    return (
-      <div className="container min-h-screen flex center">
-        <div className="card text-center animate-fade-in" style={{ width: '100%', maxWidth: 400 }}>
-          <div className="success-icon" style={{ backgroundColor: '#FEE2E2', borderColor: '#EF4444', color: '#EF4444' }}>⚠️</div>
-          <h2 style={{ marginBottom: 8, color: '#EF4444' }}>Invalid QR Code</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>Please scan a valid Gate QR Code to check-in.</p>
-        </div>
-      </div>
-    );
+    return <ProductLandingPage />;
   }
 
   if (step === 'done') {
