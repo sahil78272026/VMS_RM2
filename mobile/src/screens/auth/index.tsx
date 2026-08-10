@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, Image, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-import { T, Card, Btn, Input, PageLayout, Badge, Modal } from '../../components/UI';
+import { T, Card, Btn, Input, PageLayout, Badge, Modal, SearchableSelect } from '../../components/UI';
 import { AuthService, FlatService, SocietyService } from '../../services';
 import { Picker } from '@react-native-picker/picker';
 
@@ -412,9 +412,10 @@ export function RegisterScreen({ navigation, route }: any) {
       return;
     }
     setLoadingFlats(true);
-    FlatService.getAll({ society_id: selectedSocietyId, per_page: 1000 })
+    FlatService.getAll({ society_id: selectedSocietyId, per_page: 5000 })
       .then((r: any) => {
         const items = r.data?.data?.items || r.data?.data || [];
+        items.sort((a: any, b: any) => a.flat_number.localeCompare(b.flat_number, undefined, { numeric: true, sensitivity: 'base' }));
         setFlats(items);
         setForm((prev) => ({ ...prev, flat_id: '' }));
       })
@@ -591,39 +592,22 @@ export function RegisterScreen({ navigation, route }: any) {
         <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>
           2. Select Flat Number *
         </Text>
-        <View style={{ backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, marginBottom: 16 }}>
-          {loadingFlats ? (
-            <View style={{ padding: 14, flexDirection: 'row', alignItems: 'center' }}>
-              <ActivityIndicator size="small" color={T.accent} style={{ marginRight: 8 }} />
-              <Text style={{ color: T.muted }}>Loading flats for society...</Text>
-            </View>
-          ) : (
-            <Picker
-              selectedValue={form.flat_id}
-              enabled={!loadingFlats && flats.length > 0}
-              onValueChange={(v: string) => {
-                setForm({ ...form, flat_id: v });
-                setErrorMsg(null);
-              }}
-              style={{ color: T.text }}
-              dropdownIconColor={T.muted}
-            >
-              <Picker.Item
-                label={flats.length === 0 ? 'No flats available' : 'Select your flat number...'}
-                value=""
-                color={T.muted}
-              />
-              {flats.map((f) => (
-                <Picker.Item
-                  key={f.id}
-                  label={`Flat ${f.flat_number}`}
-                  value={f.id.toString()}
-                  color={getFlatColor(f.flat_number)}
-                />
-              ))}
-            </Picker>
-          )}
-        </View>
+        {loadingFlats ? (
+          <View style={{ backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+            <ActivityIndicator size="small" color={T.accent} style={{ marginRight: 8 }} />
+            <Text style={{ color: T.muted }}>Loading flats for society...</Text>
+          </View>
+        ) : (
+          <SearchableSelect
+            value={form.flat_id}
+            onChange={(v: string) => {
+              setForm({ ...form, flat_id: v });
+              setErrorMsg(null);
+            }}
+            options={flats.map((f: any) => ({ label: `Flat ${f.flat_number}`, value: f.id.toString(), color: getFlatColor(f.flat_number) }))}
+            placeholder={flats.length === 0 ? 'No flats available' : 'Select your flat number...'}
+          />
+        )}
 
         {/* Step 4: Name Input */}
         <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>

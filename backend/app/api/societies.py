@@ -215,3 +215,60 @@ def remove_society_admin(
         "data": None,
         "error": None
     }
+
+
+# ── Super Admin Society Lifecycle Endpoints ─────────────────────────────────
+
+@router.post("/{society_id}/suspend")
+def suspend_society(
+    society_id: int,
+    current_user: User = Depends(require_super_admin),
+    db: Session = Depends(get_db)
+):
+    service = SocietyService(db)
+    society = service.suspend(society_id)
+    return {
+        "success": True,
+        "message": f"Society '{society.name}' suspended. All users are locked out.",
+        "data": society.to_dict(),
+        "error": None
+    }
+
+@router.post("/{society_id}/activate")
+def activate_society(
+    society_id: int,
+    current_user: User = Depends(require_super_admin),
+    db: Session = Depends(get_db)
+):
+    service = SocietyService(db)
+    society = service.activate(society_id)
+    return {
+        "success": True,
+        "message": f"Society '{society.name}' activated successfully.",
+        "data": society.to_dict(),
+        "error": None
+    }
+
+@router.delete("/{society_id}")
+def delete_society(
+    society_id: int,
+    current_user: User = Depends(require_super_admin),
+    db: Session = Depends(get_db)
+):
+    service = SocietyService(db)
+    # Ensure it's suspended first (safety check)
+    society = service.get_by_id(society_id)
+    if society.status != "suspended":
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail="Society must be suspended before it can be permanently deleted."
+        )
+        
+    service.delete(society_id)
+    return {
+        "success": True,
+        "message": f"Society '{society.name}' and all its data was permanently deleted.",
+        "data": None,
+        "error": None
+    }

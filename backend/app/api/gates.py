@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.database import get_db
+from app.api.deps import get_active_society_id
 from app.services.gate_service import GateService
 from app.utils.response import success, error
 from app.utils.exceptions import AppException
@@ -48,14 +49,16 @@ async def get_gate(gate_id: int, request: Request, db: Session = Depends(get_db)
 
 
 @router.post("")
-async def create_gate(request: Request, db: Session = Depends(get_db)):
+async def create_gate(
+    request: Request,
+    db: Session = Depends(get_db),
+    society_id: int = Depends(get_active_society_id)
+):
     """Admin: add a new gate to society."""
     try:
         gate_service = GateService(db)
         data = await request.json()
-        header_society_id = request.headers.get("X-Society-ID")
-        if "society_id" not in data and header_society_id and header_society_id.isdigit():
-            data["society_id"] = int(header_society_id)
+        data["society_id"] = society_id
         gate = gate_service.create(data)
         return success("Gate created", data=gate.to_dict(), status_code=201)
     except AppException as e:

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.database import get_db
+from app.api.deps import get_active_society_id
 from app.services.flat_service import FlatService
 from app.utils.response import success, error
 from app.utils.exceptions import AppException
@@ -66,11 +67,16 @@ async def get_all_flats(
 
 
 @router.post("")
-async def create_flat(request: Request, db: Session = Depends(get_db)):
+async def create_flat(
+    request: Request,
+    db: Session = Depends(get_db),
+    society_id: int = Depends(get_active_society_id)
+):
     """Admin: create a single flat in a society."""
     try:
         flat_service = FlatService(db)
         data = await request.json()
+        data["society_id"] = society_id
         flat = flat_service.create(data)
         return success("Flat created", data=flat.to_dict(), status_code=201)
     except AppException as e:

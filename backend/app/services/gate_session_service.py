@@ -19,7 +19,7 @@ class GateSessionService:
         self.repo      = GateSessionRepository(db)
         self.gate_repo = GateRepository(db)
 
-    def start_shift(self, guard_id: int, gate_id: int):
+    def start_shift(self, guard_id: int, gate_id: int, guard_name: str = None):
         """
         Guard starts shift at a specific gate.
         Closes any lingering open session first (safety net).
@@ -41,6 +41,7 @@ class GateSessionService:
         session = GateSession(
             society_id  = gate.society_id,
             guard_id    = guard_id,
+            guard_name  = guard_name,
             gate_id     = gate_id,
             shift_start = datetime.utcnow(),
         )

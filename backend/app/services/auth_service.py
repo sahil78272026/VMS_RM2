@@ -101,10 +101,16 @@ class AuthService:
         """Returns list of all societies this user belongs to or can access."""
         if user.is_super_admin:
             all_societies = self.society_repo.get_all_active()
-            return [s.to_dict() for s in all_societies]
+            return [{
+                "id": f"{s.id}_super_admin",
+                "society_id": s.id,
+                "society_name": s.name,
+                "society_slug": s.slug,
+                "role": "super_admin"
+            } for s in all_societies]
         
-        societies = self.society_repo.get_user_societies(user.id)
-        return [s.to_dict() for s in societies]
+        # For regular users, the profiles are already generated accurately in user.to_dict()
+        return user.to_dict().get("societies", [])
 
     def login(self, phone: str, password: str, expo_push_token: str = None, requested_society_id: int = None) -> dict:
         user = self.user_repo.get_by_phone(phone.strip())
@@ -131,14 +137,13 @@ class AuthService:
         # Resolve active_society_id
         active_society_id = None
         if requested_society_id:
-            # Check if user has access
-            if user.is_super_admin or any(s["id"] == requested_society_id for s in user_societies):
+            if user.is_super_admin or any(s["society_id"] == requested_society_id for s in user_societies):
                 active_society_id = requested_society_id
             else:
                 raise ForbiddenError(f"User does not have access to society {requested_society_id}")
         else:
             if user_societies:
-                active_society_id = user_societies[0]["id"]
+                active_society_id = user_societies[0]["society_id"]
             elif user.is_super_admin:
                 active_society_id = 1
             else:
@@ -205,13 +210,13 @@ class AuthService:
 
         active_society_id = None
         if requested_society_id:
-            if user.is_super_admin or any(s["id"] == requested_society_id for s in user_societies):
+            if user.is_super_admin or any(s["society_id"] == requested_society_id for s in user_societies):
                 active_society_id = requested_society_id
             else:
                 raise ForbiddenError(f"User does not have access to society {requested_society_id}")
         else:
             if user_societies:
-                active_society_id = user_societies[0]["id"]
+                active_society_id = user_societies[0]["society_id"]
             elif user.is_super_admin:
                 active_society_id = 1
             else:
@@ -301,13 +306,13 @@ class AuthService:
 
         active_society_id = None
         if requested_society_id:
-            if user.is_super_admin or any(s["id"] == requested_society_id for s in user_societies):
+            if user.is_super_admin or any(s["society_id"] == requested_society_id for s in user_societies):
                 active_society_id = requested_society_id
             else:
                 raise ForbiddenError(f"User does not have access to society {requested_society_id}")
         else:
             if user_societies:
-                active_society_id = user_societies[0]["id"]
+                active_society_id = user_societies[0]["society_id"]
             elif user.is_super_admin:
                 active_society_id = 1
             else:
@@ -343,7 +348,7 @@ class AuthService:
             raise NotFoundError("User")
 
         user_societies = self.get_user_societies(user)
-        if not user.is_super_admin and not any(s["id"] == target_society_id for s in user_societies):
+        if not user.is_super_admin and not any(s["society_id"] == target_society_id for s in user_societies):
             raise ForbiddenError(f"User does not have access to society {target_society_id}")
 
         additional_claims = {

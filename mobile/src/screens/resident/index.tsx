@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, Alert, TouchableOpacity, ScrollView, Image, BackHandler, Linking, PanResponder, Dimensions, Animated, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, Alert, TouchableOpacity, ScrollView, Image, BackHandler, Linking, PanResponder, Dimensions, Animated, StyleSheet, RefreshControl, Switch } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Audio } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VisitorLogService, PreApprovalService, FrequentPassService, MaintenanceService, AnnouncementService, FlatUserService, AmenityService } from '../../services';
 import { T, Card, Badge, Avatar, Btn, Input, Select, PageLayout, StatCard, EmptyState, LoadingScreen, Modal, Tabs, Calendar, SocietySwitcher, QuickActionTile } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
 import { BASE_URL } from '../../services/api';
+import { formatTimestamp, formatDate } from '../../utils/date';
 
 const { width } = Dimensions.get('window');
 
@@ -101,8 +104,54 @@ export function ResidentDashboard({ route }: any) {
   
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<any>(null);
-  const [form, setForm] = useState<any>({});
   const [refreshing, setRefreshing] = useState(false);
+
+  const [playRingtone, setPlayRingtone] = useState(true);
+  const soundRef = useRef<Audio.Sound | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('play_visitor_ringtone').then(val => {
+      if (val !== null) setPlayRingtone(val === 'true');
+    });
+  }, []);
+
+  const toggleRingtone = async (val: boolean) => {
+    setPlayRingtone(val);
+    await AsyncStorage.setItem('play_visitor_ringtone', String(val));
+  };
+
+  useEffect(() => {
+    const manageSound = async () => {
+      if (pending.length > 0 && playRingtone) {
+        if (!soundRef.current) {
+          try {
+            await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: true });
+            const { sound } = await Audio.Sound.createAsync(
+              { uri: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg' },
+              { isLooping: true, volume: 1.0 }
+            );
+            soundRef.current = sound;
+            await sound.playAsync();
+          } catch (e) {
+            console.log('Failed to play ringtone:', e);
+          }
+        }
+      } else {
+        if (soundRef.current) {
+          await soundRef.current.stopAsync();
+          await soundRef.current.unloadAsync();
+          soundRef.current = null;
+        }
+      }
+    };
+    manageSound();
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.stopAsync().then(() => soundRef.current?.unloadAsync());
+        soundRef.current = null;
+      }
+    };
+  }, [pending.length, playRingtone]);
 
   const load = useCallback(async () => {
     if (user?.status === 'pending_verification') {
@@ -478,7 +527,7 @@ export function ResidentDashboard({ route }: any) {
                     Monthly Dues Pending
                   </Text>
                   <Text style={{ color: Warm.textDim, fontSize: 12, marginTop: 2 }}>
-                    {validUntil ? `Cycle ended ${validUntil.toLocaleDateString()}` : 'No active cycle recorded'}
+                    {validUntil ? `Cycle ended ${formatDate(validUntil)}` : 'No active cycle recorded'}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -546,7 +595,7 @@ export function ResidentDashboard({ route }: any) {
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>{log.visitor?.name}</Text>
                       <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>
-                        {log.purpose} · {new Date(log.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {log.purpose} · {formatTimestamp(log.created_at)}
                       </Text>
                     </View>
                     <View style={{ backgroundColor: tagBg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
@@ -670,7 +719,7 @@ export function ResidentDashboard({ route }: any) {
                 <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 16 }}>{pa.visitor_name}</Text>
                 <Text style={{ color: Warm.textMuted, fontSize: 13, marginTop: 2 }}>{pa.visitor_phone} · {pa.purpose || 'Guest'}</Text>
                 <Text style={{ color: Warm.textDim, fontSize: 11, marginTop: 4 }}>
-                  Valid until {new Date(pa.valid_until).toLocaleDateString()}
+                  Valid until {formatDate(pa.valid_until)}
                 </Text>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
@@ -712,7 +761,7 @@ export function ResidentDashboard({ route }: any) {
                   {isMaintenanceExpired ? 'Due for Renewal' : 'Paid & Active'}
                 </Text>
                 <Text style={{ color: Warm.textMuted, fontSize: 13, marginTop: 4 }}>
-                  {validUntil ? `Valid until: ${validUntil.toLocaleDateString()}` : 'No active cycle'}
+                  {validUntil ? `Valid until: ${formatDate(validUntil)}` : 'No active cycle'}
                 </Text>
               </View>
               <View style={{ backgroundColor: isMaintenanceExpired ? Warm.redDim : Warm.greenDim, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
@@ -779,7 +828,7 @@ export function ResidentDashboard({ route }: any) {
                   ₹{p.amount} ({p.months_added} Months)
                 </Text>
                 <Text style={{ color: Warm.textMuted, fontSize: 13, marginTop: 2 }}>
-                  Submitted: {new Date(p.created_at).toLocaleDateString()}
+                  Submitted: {formatDate(p.created_at)}
                 </Text>
                 <Text style={{ color: Warm.textDim, fontSize: 11, marginTop: 2 }}>
                   UTR: {p.utr_number}
@@ -955,6 +1004,20 @@ export function ResidentDashboard({ route }: any) {
               ))}
             </View>
           )}
+
+          {/* Settings Toggle for Ringtone */}
+          <View style={{ marginTop: 24, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 20, borderColor: Warm.cardBorder, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', ...Warm.shadow }}>
+            <View style={{ flex: 1, paddingRight: 16 }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text }}>Loud Visitor Ringtone</Text>
+              <Text style={{ fontSize: 13, color: Warm.textMuted, marginTop: 4 }}>Play a continuous alarm ringtone while a visitor is waiting at the gate.</Text>
+            </View>
+            <Switch
+              value={playRingtone}
+              onValueChange={toggleRingtone}
+              trackColor={{ false: '#E5DFD7', true: Warm.green }}
+              thumbColor={'#FFFFFF'}
+            />
+          </View>
 
           <TouchableOpacity
             onPress={logout}

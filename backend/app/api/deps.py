@@ -50,6 +50,7 @@ def get_active_society_id(
     x_society_id: Optional[str] = Header(None, alias="X-Society-ID"),
     payload: dict = Depends(get_token_payload),
     user: User = Depends(active_account_required),
+    db: Session = Depends(get_db),
 ) -> int:
     """
     Extracts the active society_id from header (if provided) or from JWT payload claims.
@@ -59,6 +60,15 @@ def get_active_society_id(
         society_id = int(x_society_id)
     else:
         society_id = payload.get("active_society_id") or 1
+
+    from app.models import Society
+    society = db.query(Society).get(society_id)
+    if society and society.status == "suspended":
+        if not (user.is_super_admin or user.role == "super_admin"):
+            raise HTTPException(
+                status_code=403,
+                detail="Society is suspended. Please contact platform administration."
+            )
 
     return society_id
 

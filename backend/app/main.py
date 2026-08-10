@@ -9,20 +9,20 @@ load_dotenv()
 from app.utils.exceptions import AppException
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="RM2 VMS", version="1.0.0")
+    app = FastAPI(title="RM2 Secure", version="1.0.0")
 
     if os.getenv("APP_ENV") == "DEV":
         import logging
         import re
         logger = logging.getLogger("uvicorn")
-        masked_url = db_url = os.getenv("DATABASE_URL", "sqlite:///rm2_vms.db")
+        db_url = os.getenv("DATABASE_URL")
         storage = os.getenv("SUPABASE_S3_BUCKET")
         
         # Mask password in URL for safe logging
-        # masked_url = re.sub(r":([^@]+)@", ":***@", db_url)
+        masked_url = re.sub(r":([^@]+)@", ":***@", db_url)
         
         print("\n" + "="*50)
-        print("🚀  STARTING RM2 VMS IN [DEV] MODE  🚀")
+        print("🚀  STARTING RM2 Secure IN [DEV] MODE  🚀")
         print("="*50)
         print(f"📦 Database : {masked_url}")
         print(f"Storage", storage)

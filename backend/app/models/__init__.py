@@ -186,6 +186,7 @@ class User(Base):
         societies_info = []
         if self.flat_user and self.flat_user.society:
             societies_info.append({
+                "id": f"{self.flat_user.society_id}_resident",
                 "society_id": self.flat_user.society_id,
                 "society_name": self.flat_user.society.name,
                 "society_slug": self.flat_user.society.slug,
@@ -195,6 +196,7 @@ class User(Base):
             })
         if self.guard and self.guard.society:
             societies_info.append({
+                "id": f"{self.guard.society_id}_guard",
                 "society_id": self.guard.society_id,
                 "society_name": self.guard.society.name,
                 "society_slug": self.guard.society.slug,
@@ -204,6 +206,7 @@ class User(Base):
         for sa in self.society_admins:
             if sa.society:
                 societies_info.append({
+                    "id": f"{sa.society_id}_admin",
                     "society_id": sa.society_id,
                     "society_name": sa.society.name,
                     "society_slug": sa.society.slug,
@@ -282,8 +285,9 @@ class Guard(Base):
     id          = Column(Integer, primary_key=True)
     society_id  = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     user_id     = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
-    employee_id = Column(String(50), nullable=False)
-    shift       = Column(Enum("morning", "night", name="guard_shift"), nullable=False)
+    employee_id    = Column(String(50), nullable=False)
+    shift          = Column(Enum("morning", "night", name="guard_shift"), nullable=False)
+    shift_pin_hash = Column(String(255), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("society_id", "employee_id", name="uq_guard_society_employee"),
@@ -365,6 +369,7 @@ class VisitorLog(Base):
     vehicle_number        = Column(String(20), nullable=True)
     entered_at            = Column(DateTime, nullable=True)
     registered_by_guard   = Column(Integer, ForeignKey("guards.id"), nullable=True)
+    guard_name            = Column(String(100), nullable=True)
 
     # Approval
     approval_source       = Column(Enum("guard_initiated", "self_checkin", name="approval_source"), nullable=False)
@@ -417,6 +422,7 @@ class VisitorLog(Base):
             "vehicle_number":        self.vehicle_number,
             "entered_at":            self.entered_at.isoformat() if self.entered_at else None,
             "registered_by_guard":   self.registered_by_guard,
+            "guard_name":            self.guard_name,
             "approval_source":       self.approval_source,
             "approval_status":       self.approval_status,
             "approved_by":           self.approved_by,
@@ -593,6 +599,7 @@ class GateSession(Base):
     id          = Column(Integer, primary_key=True)
     society_id  = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     guard_id    = Column(Integer, ForeignKey("guards.id"), nullable=False)
+    guard_name  = Column(String(100), nullable=True)
     gate_id     = Column(Integer, ForeignKey("gates.id"),  nullable=False)
     shift_start = Column(DateTime, default=datetime.utcnow, nullable=False)
     shift_end   = Column(DateTime, nullable=True)
@@ -607,6 +614,7 @@ class GateSession(Base):
             "id":          self.id,
             "society_id":  self.society_id,
             "guard_id":    self.guard_id,
+            "guard_name":  self.guard_name,
             "gate_id":     self.gate_id,
             "shift_start": self.shift_start.isoformat(),
             "shift_end":   self.shift_end.isoformat() if self.shift_end else None,

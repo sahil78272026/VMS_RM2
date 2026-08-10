@@ -11,7 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 const Stack = createNativeStackNavigator();
 
 function MainNavigator() {
-  const { user, loading } = useAuth();
+  const { user, loading, activeRole } = useAuth();
 
   if (loading) return null;
 
@@ -25,15 +25,15 @@ function MainNavigator() {
         </>
       ) : (
         <>
-          {user.role === 'super_admin' && (
+          {activeRole === 'super_admin' && (
             <>
               <Stack.Screen name="SuperAdmin" component={SuperAdminScreen} />
               <Stack.Screen name="Admin" component={AdminDashboard} />
             </>
           )}
-          {(user.role === 'admin' || user.role === 'society_admin') && <Stack.Screen name="Admin" component={AdminDashboard} />}
-          {user.role === 'resident' && <Stack.Screen name="Resident" component={ResidentDashboard} />}
-          {user.role === 'guard' && <Stack.Screen name="Guard" component={GuardDashboard} />}
+          {(activeRole === 'admin' || activeRole === 'society_admin') && <Stack.Screen name="Admin" component={AdminDashboard} />}
+          {activeRole === 'resident' && <Stack.Screen name="Resident" component={ResidentDashboard} />}
+          {activeRole === 'guard' && <Stack.Screen name="Guard" component={GuardDashboard} />}
         </>
       )}
     </Stack.Navigator>

@@ -6,7 +6,7 @@ Admin creates announcements. All roles can view active ones.
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_active_society_id
 
 from app.services.announcement_service import AnnouncementService
 from app.utils.response import success, error
@@ -52,7 +52,12 @@ async def get_announcement(announcement_id: int, request: Request, db: Session =
 
 
 @router.post("")
-async def create_announcement(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+async def create_announcement(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+    society_id: int = Depends(get_active_society_id)
+):
     """
     Admin: create a new society announcement.
     Notifies all residents via push if priority is urgent.
@@ -61,6 +66,7 @@ async def create_announcement(request: Request, db: Session = Depends(get_db), c
         announcement_service = AnnouncementService(db)
         user_id      = current_user.id
         data         = await request.json()
+        data["society_id"] = society_id
         announcement = announcement_service.create(user_id, data)
         return success("Announcement posted", data=announcement.to_dict(), status_code=201)
     except AppException as e:

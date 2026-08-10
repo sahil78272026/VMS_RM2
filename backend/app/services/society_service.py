@@ -25,7 +25,7 @@ class SocietyService:
     def get_all(self, status: str = None):
         if status:
             return self.db.query(Society).filter_by(status=status).order_by(Society.name).all()
-        return self.repo.get_all_active()
+        return self.db.query(Society).order_by(Society.name).all()
 
     def get_by_id(self, society_id: int) -> Society:
         society = self.repo.get_by_id(society_id)
@@ -255,6 +255,30 @@ class SocietyService:
         sa = SocietyAdmin(society_id=society_id, user_id=user.id)
         self.admin_repo.save(sa)
         logger.info(f"[SOCIETY] Assigned user {user.id} ({user.phone}) as admin of society {society_id}")
+
+        # Optional: Assign to a flat if flat_id is provided
+        flat_id = data.get("flat_id") if data else None
+        if flat_id:
+            from app.models import FlatUser, Flat
+            from datetime import date
+            flat = self.db.query(Flat).filter_by(id=flat_id, society_id=society_id).first()
+            if flat:
+                existing_fu = self.db.query(FlatUser).filter_by(user_id=user.id, flat_id=flat_id).first()
+                if not existing_fu:
+                    fu = FlatUser(
+                        society_id=society_id,
+                        user_id=user.id,
+                        flat_id=flat_id,
+                        role="primary",
+                        is_owner=True,
+                        can_approve=True,
+                        move_in_date=date.today()
+                    )
+                    self.db.add(fu)
+                    flat.status = "occupied"
+                    self.db.commit()
+                    logger.info(f"[SOCIETY] Also assigned admin {user.id} to flat {flat.flat_number} as resident")
+
         return sa
 
     def remove_admin(self, society_id: int, user_id: int):
@@ -267,3 +291,25 @@ class SocietyService:
     def get_society_admins(self, society_id: int):
         self.get_by_id(society_id)
         return self.admin_repo.get_admins_by_society(society_id)
+
+    def suspend(self, society_id: int) -> Society:
+        society = self.get_by_id(society_id)
+        society.status = "suspended"
+        self.repo.save(society)
+        logger.warning(f"[SOCIETY] Suspended society {society_id} ({society.name})")
+        return society
+
+    def activate(self, society_id: int) -> Society:
+        society = self.get_by_id(society_id)
+        society.status = "active"
+        self.repo.save(society)
+        logger.info(f"[SOCIETY] Activated society {society_id} ({society.name})")
+        return society
+
+    def delete(self, society_id: int):
+        society = self.get_by_id(society_id)
+        # Because we have CASCADE delete set up in SQLAlchemy models (or DB level),
+        # deleting this society will wipe flats, gates, visitor logs, etc.
+        self.repo.delete(society)
+        logger.critical(f"[SOCIETY] PERMANENTLY DELETED society {society_id} ({society.name}) and all associated data.")
+

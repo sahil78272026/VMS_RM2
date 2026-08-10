@@ -36,3 +36,4 @@ class AssignAdminRequest(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    flat_id: Optional[int] = None

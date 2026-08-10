@@ -71,11 +71,18 @@ class GuardService:
             user.status = "active"
             self.user_repo.save(user)
 
+        shift_pin_hash = None
+        if data.get("shift_pin"):
+            shift_pin_hash = bcrypt.hashpw(
+                str(data["shift_pin"]).encode("utf-8"), bcrypt.gensalt()
+            ).decode("utf-8")
+
         guard = Guard(
-            society_id  = society_id,
-            user_id     = user.id,
-            employee_id = data["employee_id"].strip(),
-            shift       = data["shift"],
+            society_id     = society_id,
+            user_id        = user.id,
+            employee_id    = data["employee_id"].strip(),
+            shift          = data["shift"],
+            shift_pin_hash = shift_pin_hash,
         )
         self.repo.save(guard)
         logger.info(f"[GUARD] Created: {user.name} ({guard.employee_id}) in society {society_id}")
@@ -89,6 +96,10 @@ class GuardService:
             if self.repo.employee_id_exists(data["employee_id"], society_id=guard.society_id, exclude_id=guard_id):
                 raise DuplicateEntryError("Employee ID already exists in this society", field="employee_id")
             guard.employee_id = data["employee_id"]
+        if data.get("shift_pin"):
+            guard.shift_pin_hash = bcrypt.hashpw(
+                str(data["shift_pin"]).encode("utf-8"), bcrypt.gensalt()
+            ).decode("utf-8")
         self.repo.save(guard)
         return guard
 

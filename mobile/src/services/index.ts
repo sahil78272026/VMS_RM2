@@ -24,6 +24,9 @@ export const SocietyService = {
   getAdmins: (id: number | string) => api.get(`/societies/${id}/admins`),
   assignAdmin: (id: number | string, d: any) => api.post(`/societies/${id}/admins`, d),
   removeAdmin: (society_id: number | string, user_id: number | string) => api.delete(`/societies/${society_id}/admins/${user_id}`),
+  suspend: (id: number | string) => api.post(`/societies/${id}/suspend`),
+  activate: (id: number | string) => api.post(`/societies/${id}/activate`),
+  delete: (id: number | string) => api.delete(`/societies/${id}`),
 };
 
 export const FlatService = {
@@ -61,8 +64,8 @@ export const GateService = {
 };
 
 export const GateSessionService = {
-  startShift: (gate_id: string) => api.post('/gate-sessions/start', { gate_id }),
-  endShift: () => api.post('/gate-sessions/end'),
+  startShift: (gate_id: string, guard_name?: string, target_guard_id?: string, pin?: string) => api.post('/gate-sessions/start', { gate_id, guard_name, target_guard_id, pin }),
+  endShift: (target_guard_id?: string) => api.post('/gate-sessions/end', { target_guard_id }),
   getAll: (p?: any) => api.get('/gate-sessions', { params: p }),
   getActive: () => api.get('/gate-sessions/active'),
   getMy: () => api.get('/gate-sessions/my'),

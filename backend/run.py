@@ -34,9 +34,16 @@ if __name__ == "__main__":
     
     logging.info(f"Starting RM2 VMS on port {port} | debug={debug}")
 
+    from uvicorn.config import LOGGING_CONFIG
+    
+    # Add timestamps to Uvicorn's default and access logs
+    LOGGING_CONFIG["formatters"]["default"]["fmt"] = "%(asctime)s %(levelprefix)s %(message)s"
+    LOGGING_CONFIG["formatters"]["access"]["fmt"] = "%(asctime)s %(levelprefix)s %(client_addr)s - \"%(request_line)s\" %(status_code)s"
+
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
         port=port,
-        reload=debug
+        reload=debug,
+        log_config=LOGGING_CONFIG
     )

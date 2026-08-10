@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, Alert, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { T, Card, Btn, PageLayout, EmptyState, LoadingScreen, Modal, Badge, Input } from '../../components/UI';
+import { T, Card, Btn, PageLayout, EmptyState, LoadingScreen, Modal, Badge, Input, Select } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
-import { SocietyService } from '../../services';
+import { SocietyService, FlatService } from '../../services';
 
 // ── Pattern Detection & Generation Helper ────────────────────────────────────
 function analyzeAndGenerateFlats(sample: string, config: any): { type: string; title: string; desc: string; list: string[] } {
@@ -125,9 +125,12 @@ export function SuperAdminScreen() {
   const [societyAdmins, setSocietyAdmins] = useState<any[]>([]);
   const [loadingOverview, setLoadingOverview] = useState<boolean>(false);
   const [showAddAdmin, setShowAddAdmin] = useState<boolean>(false);
-  const [adminForm, setAdminForm] = useState({ name: '', phone: '', email: '' });
+  const [adminForm, setAdminForm] = useState({ name: '', phone: '', email: '', flat_id: '' });
+  const [societyFlats, setSocietyFlats] = useState<any[]>([]);
   const [submittingAdmin, setSubmittingAdmin] = useState(false);
   const [generatingFlats, setGeneratingFlats] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [showDeletePrompt, setShowDeletePrompt] = useState(false);
 
   // New Society Form
   const [form, setForm] = useState<any>({
@@ -232,20 +235,74 @@ export function SuperAdminScreen() {
     }
   };
 
+  const handleSuspend = async () => {
+    if (!selectedSoc) return;
+    Alert.alert(
+      'Suspend Society',
+      `Are you sure you want to suspend ${selectedSoc.name}? All users will be instantly locked out.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Suspend', style: 'destructive', onPress: async () => {
+            try {
+              await SocietyService.suspend(selectedSoc.id);
+              Alert.alert('Suspended', `${selectedSoc.name} has been suspended.`);
+              setModal(null);
+              load();
+            } catch (err: any) {
+              Alert.alert('Error', err.response?.data?.message || 'Failed to suspend society');
+            }
+        }}
+      ]
+    );
+  };
+
+  const handleActivate = async () => {
+    if (!selectedSoc) return;
+    try {
+      await SocietyService.activate(selectedSoc.id);
+      Alert.alert('Activated', `${selectedSoc.name} is now active.`);
+      setModal(null);
+      load();
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.message || 'Failed to activate society');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedSoc) return;
+    if (deleteConfirmation.trim() !== selectedSoc.name) {
+      return Alert.alert('Verification Failed', `You must type exactly "${selectedSoc.name}" to delete.`);
+    }
+    try {
+      await SocietyService.delete(selectedSoc.id);
+      Alert.alert('Deleted', `${selectedSoc.name} and all associated data have been permanently destroyed.`);
+      setShowDeletePrompt(false);
+      setDeleteConfirmation('');
+      setModal(null);
+      load();
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.message || 'Failed to delete society');
+    }
+  };
+
   const openSocietyOverview = async (soc: any) => {
     setSelectedSoc(soc);
     setModal('overview');
     setLoadingOverview(true);
     setShowAddAdmin(false);
-    setAdminForm({ name: '', phone: '', email: '' });
+    setAdminForm({ name: '', phone: '', email: '', flat_id: '' });
 
     try {
-      const [resStats, resAdmins] = await Promise.all([
+      const [resStats, resAdmins, resFlats] = await Promise.all([
         SocietyService.getStats(soc.id),
         SocietyService.getAdmins(soc.id),
+        FlatService.getAll({ per_page: 5000, society_id: soc.id }).catch(() => ({ data: { data: [] } })),
       ]);
       setSocStats(resStats.data?.data || null);
       setSocietyAdmins(resAdmins.data?.data || []);
+      const frFlats = resFlats.data?.data?.items || resFlats.data?.data || [];
+      frFlats.sort((a: any, b: any) => a.flat_number.localeCompare(b.flat_number, undefined, { numeric: true, sensitivity: 'base' }));
+      setSocietyFlats(frFlats);
     } catch (err) {
       console.error('Failed to load society overview stats', err);
     } finally {
@@ -268,9 +325,10 @@ export function SuperAdminScreen() {
         name: adminForm.name.trim(),
         phone: adminForm.phone.trim(),
         email: adminForm.email.trim() || undefined,
+        flat_id: adminForm.flat_id ? parseInt(adminForm.flat_id) : undefined,
       });
       Alert.alert('Success', `Admin ${adminForm.name} assigned! They can now log in via OTP.`);
-      setAdminForm({ name: '', phone: '', email: '' });
+      setAdminForm({ name: '', phone: '', email: '', flat_id: '' });
       setShowAddAdmin(false);
       const res = await SocietyService.getAdmins(selectedSoc.id);
       setSocietyAdmins(res.data?.data || []);
@@ -352,6 +410,9 @@ export function SuperAdminScreen() {
               </Text>
               {s.city && (
                 <Badge color="blue" small>{s.city}</Badge>
+              )}
+              {s.status === 'suspended' && (
+                <Badge color="red" small>SUSPENDED</Badge>
               )}
             </View>
             <Text style={{ color: T.muted, fontSize: 12, marginTop: 4 }} numberOfLines={1}>
@@ -518,6 +579,17 @@ export function SuperAdminScreen() {
                     value={adminForm.email}
                     onChange={(v: string) => setAdminForm({ ...adminForm, email: v })}
                   />
+                  {societyFlats.length > 0 && (
+                    <Select
+                      label="Assign to Flat (Optional)"
+                      options={[
+                        { label: '-- Select Flat (Optional) --', value: '' },
+                        ...societyFlats.map(f => ({ label: f.flat_number, value: String(f.id) }))
+                      ]}
+                      value={adminForm.flat_id}
+                      onChange={(v: string) => setAdminForm({ ...adminForm, flat_id: v })}
+                    />
+                  )}
 
                   <Btn
                     full
@@ -544,6 +616,72 @@ export function SuperAdminScreen() {
                 >
                   ⚡ Generate / Add More Flats
                 </Btn>
+              </View>
+
+              {/* 4. DANGER ZONE */}
+              <View style={{ marginTop: 24, borderTopWidth: 1, borderColor: T.border, paddingTop: 16 }}>
+                <Text style={{ color: T.red, fontSize: 11, fontWeight: '800', textTransform: 'uppercase', marginBottom: 12, letterSpacing: 0.5 }}>
+                  DANGER ZONE (TENANT LIFECYCLE)
+                </Text>
+
+                {selectedSoc.status !== 'suspended' ? (
+                  <View style={{ backgroundColor: '#FEF2F2', padding: 12, borderRadius: 8, borderColor: '#FECACA', borderWidth: 1 }}>
+                    <Text style={{ color: '#991B1B', fontSize: 13, fontWeight: '700', marginBottom: 6 }}>
+                      Suspend Tenant Access
+                    </Text>
+                    <Text style={{ color: '#B91C1C', fontSize: 11, marginBottom: 12 }}>
+                      Immediately locks out all Guards, Residents, and Admins. Data is preserved safely.
+                    </Text>
+                    <TouchableOpacity onPress={handleSuspend} style={{ backgroundColor: '#EF4444', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}>
+                      <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 13 }}>⏸ Suspend {selectedSoc.name}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={{ gap: 12 }}>
+                    <View style={{ backgroundColor: '#ECFDF5', padding: 12, borderRadius: 8, borderColor: '#A7F3D0', borderWidth: 1 }}>
+                      <Text style={{ color: '#065F46', fontSize: 13, fontWeight: '700', marginBottom: 6 }}>
+                        Restore Tenant Access
+                      </Text>
+                      <TouchableOpacity onPress={handleActivate} style={{ backgroundColor: '#10B981', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}>
+                        <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 13 }}>▶️ Reactivate Society</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={{ backgroundColor: '#FEF2F2', padding: 12, borderRadius: 8, borderColor: '#EF4444', borderWidth: 2 }}>
+                      <Text style={{ color: '#991B1B', fontSize: 13, fontWeight: '800', marginBottom: 6 }}>
+                        Permanent Data Destruction
+                      </Text>
+                      <Text style={{ color: '#B91C1C', fontSize: 11, marginBottom: 12 }}>
+                        Warning: This will irreversibly destroy ALL flats, logs, users, and gates tied to this society.
+                      </Text>
+                      
+                      {!showDeletePrompt ? (
+                        <TouchableOpacity onPress={() => setShowDeletePrompt(true)} style={{ backgroundColor: '#DC2626', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}>
+                          <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 13 }}>🗑 Permanently Delete Data</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={{ marginTop: 8 }}>
+                          <Text style={{ color: '#991B1B', fontSize: 12, fontWeight: '700', marginBottom: 6 }}>
+                            Type "{selectedSoc.name}" to confirm:
+                          </Text>
+                          <Input
+                            placeholder={selectedSoc.name}
+                            value={deleteConfirmation}
+                            onChange={(v: string) => setDeleteConfirmation(v)}
+                          />
+                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                            <TouchableOpacity onPress={() => { setShowDeletePrompt(false); setDeleteConfirmation(''); }} style={{ flex: 1, backgroundColor: '#FECACA', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}>
+                              <Text style={{ color: '#991B1B', fontWeight: '700', fontSize: 13 }}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleDelete} style={{ flex: 1, backgroundColor: '#991B1B', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}>
+                              <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 13 }}>Confirm Destroy</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
               </View>
             </ScrollView>
           )}

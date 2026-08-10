@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { T, Card, Btn, StatCard, EmptyState, LoadingScreen, Tabs, Avatar, Badge, Input, Select, Modal, SocietySwitcher } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
 import { UserService, FlatUserService, GuardService, FlatService, MaintenanceService, AmenityService } from '../../services';
+import { formatDate } from '../../utils/date';
 export { SuperAdminScreen } from './SuperAdminScreen';
 
 const { width } = Dimensions.get('window');
@@ -139,7 +140,9 @@ export function AdminDashboard({ navigation }: any) {
         MaintenanceService.getPending({ society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
         AmenityService.getAll({ society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
       ]);
-      setFlats(fr.data?.data?.items || fr.data?.data || []);
+      const frFlats = fr.data?.data?.items || fr.data?.data || [];
+      frFlats.sort((a: any, b: any) => a.flat_number.localeCompare(b.flat_number, undefined, { numeric: true, sensitivity: 'base' }));
+      setFlats(frFlats);
       setGuards(gr.data?.data?.items || gr.data?.data || []);
       setPendingResidents(pr.data?.data?.items || pr.data?.data || []);
       setActiveResidents(ar.data?.data?.items || ar.data?.data || []);
@@ -632,7 +635,7 @@ export function AdminDashboard({ navigation }: any) {
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 16 }}>Flat {f.flat_number}</Text>
                   <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>
-                    {validUntil ? `Valid through ${validUntil.toLocaleDateString()}` : 'No active cycle recorded'}
+                    {validUntil ? `Valid through ${formatDate(validUntil)}` : 'No active cycle recorded'}
                   </Text>
                 </View>
                 <View style={{ backgroundColor: isExpired ? Warm.redDim : Warm.greenDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
@@ -930,6 +933,14 @@ export function AdminDashboard({ navigation }: any) {
             placeholder="e.g. SEC-001"
             value={form?.employee_id || ''}
             onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), employee_id: v }))}
+          />
+          <Input
+            label="4-Digit Kiosk PIN (Optional)"
+            placeholder="e.g. 1234"
+            maxLength={4}
+            keyboardType="number-pad"
+            value={form?.shift_pin || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), shift_pin: v.replace(/[^0-9]/g, '') }))}
           />
           <Select
             label="Duty Shift"

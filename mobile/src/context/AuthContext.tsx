@@ -8,7 +8,7 @@ const AuthContext = createContext<any>(null);
 
 export const AuthProvider = ({ children }: any) => {
   const [user, setUser]                       = useState<any>(null);
-  const [activeSocietyId, setActiveSocietyId] = useState<number | null>(null);
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [societies, setSocieties]             = useState<any[]>([]);
   const [loading, setLoading]                 = useState(true);
 
@@ -17,13 +17,14 @@ export const AuthProvider = ({ children }: any) => {
       try {
         const stored          = await AsyncStorage.getItem('user');
         const token           = await AsyncStorage.getItem('access_token');
-        const storedSocietyId = await AsyncStorage.getItem('active_society_id');
+        const storedProfileId = await AsyncStorage.getItem('active_profile_id');
         if (stored && token) {
           const parsedUser = JSON.parse(stored);
           setUser(parsedUser);
-          setSocieties(parsedUser.societies || []);
-          const defaultSocId = parsedUser.societies?.[0]?.id ?? parsedUser.active_society_id ?? null;
-          setActiveSocietyId(storedSocietyId ? parseInt(storedSocietyId) : defaultSocId);
+          const userSocieties = parsedUser.societies || [];
+          setSocieties(userSocieties);
+          const defaultProfileId = userSocieties?.[0]?.id ?? null;
+          setActiveProfileId(storedProfileId || defaultProfileId);
         } else {
           await AsyncStorage.clear();
         }
@@ -38,7 +39,7 @@ export const AuthProvider = ({ children }: any) => {
   const login = useCallback(async (phone: string, password: string, requested_society_id?: number) => {
     let expo_push_token = null;
     try {
-      if (Device.isDevice && Constants.appOwnership !== 'expo') {
+      if (Device.isDevice) {
         const Notifications = await import('expo-notifications');
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;
@@ -62,23 +63,33 @@ export const AuthProvider = ({ children }: any) => {
     await AsyncStorage.setItem('access_token',      data.access_token);
     await AsyncStorage.setItem('refresh_token',     data.refresh_token);
     await AsyncStorage.setItem('user',              JSON.stringify(data.user));
+    const userSocieties = data.user.societies || [];
+    let newProfileId = null;
     if (data.active_society_id) {
       await AsyncStorage.setItem('active_society_id', String(data.active_society_id));
-      setActiveSocietyId(data.active_society_id);
+      const matchingProfile = userSocieties.find((s: any) => s.society_id === data.active_society_id);
+      if (matchingProfile) newProfileId = matchingProfile.id;
     } else {
       await AsyncStorage.removeItem('active_society_id');
-      setActiveSocietyId(null);
+    }
+    
+    if (newProfileId) {
+      await AsyncStorage.setItem('active_profile_id', newProfileId);
+      setActiveProfileId(newProfileId);
+    } else {
+      await AsyncStorage.removeItem('active_profile_id');
+      setActiveProfileId(null);
     }
 
     setUser(data.user);
-    setSocieties(data.user.societies || []);
+    setSocieties(userSocieties);
     return data.user;
   }, []);
 
   const loginWithGoogle = useCallback(async (googleData: { email: string; name?: string; google_id?: string; photo_url?: string; society_id?: number }) => {
     let expo_push_token = null;
     try {
-      if (Device.isDevice && Constants.appOwnership !== 'expo') {
+      if (Device.isDevice) {
         const Notifications = await import('expo-notifications');
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;
@@ -105,21 +116,36 @@ export const AuthProvider = ({ children }: any) => {
     await AsyncStorage.setItem('access_token',      data.access_token);
     await AsyncStorage.setItem('refresh_token',     data.refresh_token);
     await AsyncStorage.setItem('user',              JSON.stringify(data.user));
+
+    const userSocieties = data.user.societies || [];
+    let newProfileId = null;
     if (data.active_society_id) {
       await AsyncStorage.setItem('active_society_id', String(data.active_society_id));
-      setActiveSocietyId(data.active_society_id);
+      const matchingProfile = userSocieties.find((s: any) => s.society_id === data.active_society_id);
+      if (matchingProfile) newProfileId = matchingProfile.id;
     } else {
       await AsyncStorage.removeItem('active_society_id');
-      setActiveSocietyId(null);
+    }
+    
+    if (newProfileId) {
+      await AsyncStorage.setItem('active_profile_id', newProfileId);
+      setActiveProfileId(newProfileId);
+    } else {
+      await AsyncStorage.removeItem('active_profile_id');
+      setActiveProfileId(null);
     }
 
     setUser(data.user);
-    setSocieties(data.user.societies || []);
+    setSocieties(userSocieties);
     return data.user;
   }, []);
 
-  const switchSociety = useCallback(async (targetSocietyId: number) => {
+  const switchSociety = useCallback(async (profileId: string) => {
     try {
+      const selectedProfile = societies.find(s => s.id === profileId);
+      if (!selectedProfile) return;
+      const targetSocietyId = selectedProfile.society_id;
+
       const res = await AuthService.switchSociety(targetSocietyId);
       const data = res.data.data;
 
@@ -127,16 +153,17 @@ export const AuthProvider = ({ children }: any) => {
       await AsyncStorage.setItem('refresh_token',     data.refresh_token);
       await AsyncStorage.setItem('user',              JSON.stringify(data.user));
       await AsyncStorage.setItem('active_society_id', String(data.active_society_id));
+      await AsyncStorage.setItem('active_profile_id', profileId);
 
       setUser(data.user);
-      setActiveSocietyId(data.active_society_id);
+      setActiveProfileId(profileId);
       setSocieties(data.user.societies || []);
       return data;
     } catch (err) {
       console.error('Failed to switch society:', err);
       throw err;
     }
-  }, []);
+  }, [societies]);
 
   const sendOtp = useCallback(async (phone: string) => {
     const res = await AuthService.sendOtp(phone);
@@ -146,7 +173,7 @@ export const AuthProvider = ({ children }: any) => {
   const verifyOtp = useCallback(async (phone: string, otp: string, requested_society_id?: number) => {
     let expo_push_token = null;
     try {
-      if (Device.isDevice && Constants.appOwnership !== 'expo') {
+      if (Device.isDevice) {
         const Notifications = await import('expo-notifications');
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;
@@ -174,16 +201,27 @@ export const AuthProvider = ({ children }: any) => {
     await AsyncStorage.setItem('access_token',      data.access_token);
     await AsyncStorage.setItem('refresh_token',     data.refresh_token);
     await AsyncStorage.setItem('user',              JSON.stringify(data.user));
+    
+    const userSocieties = data.user.societies || [];
+    let newProfileId = null;
     if (data.active_society_id) {
       await AsyncStorage.setItem('active_society_id', String(data.active_society_id));
-      setActiveSocietyId(data.active_society_id);
+      const matchingProfile = userSocieties.find((s: any) => s.society_id === data.active_society_id);
+      if (matchingProfile) newProfileId = matchingProfile.id;
     } else {
       await AsyncStorage.removeItem('active_society_id');
-      setActiveSocietyId(null);
+    }
+
+    if (newProfileId) {
+      await AsyncStorage.setItem('active_profile_id', newProfileId);
+      setActiveProfileId(newProfileId);
+    } else {
+      await AsyncStorage.removeItem('active_profile_id');
+      setActiveProfileId(null);
     }
 
     setUser(data.user);
-    setSocieties(data.user.societies || []);
+    setSocieties(userSocieties);
     return data.user;
   }, []);
 
@@ -195,15 +233,27 @@ export const AuthProvider = ({ children }: any) => {
       await AsyncStorage.setItem('access_token',      data.access_token);
       await AsyncStorage.setItem('refresh_token',     data.refresh_token);
       await AsyncStorage.setItem('user',              JSON.stringify(data.user));
+      
+      const userSocieties = data.user.societies || [];
+      let newProfileId = null;
       if (data.active_society_id) {
         await AsyncStorage.setItem('active_society_id', String(data.active_society_id));
-        setActiveSocietyId(data.active_society_id);
+        const matchingProfile = userSocieties.find((s: any) => s.society_id === data.active_society_id);
+        if (matchingProfile) newProfileId = matchingProfile.id;
       } else {
         await AsyncStorage.removeItem('active_society_id');
-        setActiveSocietyId(null);
       }
+
+      if (newProfileId) {
+        await AsyncStorage.setItem('active_profile_id', newProfileId);
+        setActiveProfileId(newProfileId);
+      } else {
+        await AsyncStorage.removeItem('active_profile_id');
+        setActiveProfileId(null);
+      }
+      
       setUser(data.user);
-      setSocieties(data.user.societies || []);
+      setSocieties(userSocieties);
     }
     return data;
   }, []);
@@ -212,19 +262,22 @@ export const AuthProvider = ({ children }: any) => {
     try { await AuthService.logout(); } catch {}
     await AsyncStorage.clear();
     setUser(null);
-    setActiveSocietyId(null);
+    setActiveProfileId(null);
     setSocieties([]);
   }, []);
 
   const isRole = useCallback((role: string) => user?.role === role, [user]);
 
-  const activeSociety = societies.find(s => s.id === activeSocietyId) || societies[0] || null;
-  const effectiveSocietyId = activeSociety?.id || activeSocietyId;
+  const activeSociety = societies.find(s => s.id === activeProfileId) || societies[0] || null;
+  const effectiveSocietyId = activeSociety?.society_id || null;
+  const activeRole = activeSociety?.role || user?.role || null;
 
   return (
     <AuthContext.Provider value={{
       user,
       activeSocietyId: effectiveSocietyId,
+      activeRole,
+      activeProfileId: activeSociety?.id || null,
       activeSociety,
       societies,
       loading,

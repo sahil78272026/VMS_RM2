@@ -215,6 +215,59 @@ export const Select = ({ label, value, onChange, options, placeholder, required 
   </View>
 );
 
+export const SearchableSelect = ({ label, value, onChange, options, placeholder, required }: any) => {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [search, setSearch] = useState('');
+  
+  const filtered = options.filter((o: any) => o.label.toLowerCase().includes(search.toLowerCase()));
+  const selectedLabel = options.find((o: any) => o.value === value)?.label || placeholder;
+
+  return (
+    <View style={{ marginBottom: 12 }}>
+      {label && <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>{label} {required && <Text style={{color: T.red}}>*</Text>}</Text>}
+      <TouchableOpacity onPress={() => setModalVisible(true)} style={{ backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ color: value ? T.text : T.dim, fontSize: 15 }}>{selectedLabel}</Text>
+        <Text style={{ color: T.muted }}>▼</Text>
+      </TouchableOpacity>
+
+      <RNModal transparent visible={modalVisible} animationType="fade" onRequestClose={() => setModalVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: '#00000088', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: T.surface, borderRadius: 20, padding: 20, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: T.text }}>{placeholder}</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}><Text style={{ color: T.muted, fontSize: 24 }}>✕</Text></TouchableOpacity>
+            </View>
+            <TextInput
+              style={{ backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 16, fontSize: 15, color: T.text }}
+              placeholder="Search..."
+              placeholderTextColor={T.dim}
+              value={search}
+              onChangeText={setSearch}
+              autoCapitalize="none"
+            />
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {filtered.map((o: any) => (
+                <TouchableOpacity
+                  key={o.value}
+                  onPress={() => {
+                    onChange(o.value);
+                    setModalVisible(false);
+                    setSearch('');
+                  }}
+                  style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: T.border }}
+                >
+                  <Text style={{ color: o.color || T.text, fontSize: 16, fontWeight: value === o.value ? '700' : '500' }}>{o.label}</Text>
+                </TouchableOpacity>
+              ))}
+              {filtered.length === 0 && <Text style={{ color: T.muted, textAlign: 'center', marginTop: 20 }}>No results found</Text>}
+            </ScrollView>
+          </View>
+        </View>
+      </RNModal>
+    </View>
+  );
+};
+
 export const Textarea = ({ label, value, onChange, placeholder, required, keyboardType = 'default', autoCapitalize = 'sentences' }: any) => (
   <View style={{ marginBottom: 12 }}>
     {label && <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>{label} {required && <Text style={{color: T.red}}>*</Text>}</Text>}
@@ -446,7 +499,7 @@ export const SocietySwitcher = ({ style, theme = 'dark', flatNumber }: any) => {
 
   const isWarm = theme === 'warm';
 
-  const handleSelect = async (id: number) => {
+  const handleSelect = async (id: string) => {
     setSwitching(true);
     try {
       await switchSociety(id);
@@ -455,9 +508,9 @@ export const SocietySwitcher = ({ style, theme = 'dark', flatNumber }: any) => {
     setSwitching(false);
   };
 
-  const displayName = flatNumber 
-    ? `${activeSociety?.name || 'RM2'} ${flatNumber}`
-    : (activeSociety?.name || 'Select Society');
+  const displayName = activeSociety 
+    ? `${activeSociety.society_name} (${activeSociety.role.charAt(0).toUpperCase() + activeSociety.role.slice(1)})`
+    : 'Select Profile';
 
   return (
     <>
@@ -503,8 +556,8 @@ export const SocietySwitcher = ({ style, theme = 'dark', flatNumber }: any) => {
           <View style={{ backgroundColor: isWarm ? '#FFFFFF' : T.surface, borderRadius: 20, padding: 24, maxHeight: '80%', borderWidth: 1, borderColor: isWarm ? '#E5DFD7' : T.border }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <View>
-                <Text style={{ fontSize: 18, fontWeight: '800', color: isWarm ? '#1E293B' : T.text }}>Switch Society</Text>
-                <Text style={{ fontSize: 12, color: isWarm ? '#64748B' : T.muted, marginTop: 2 }}>Select a community to manage or view</Text>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: isWarm ? '#1E293B' : T.text }}>Switch Profile</Text>
+                <Text style={{ fontSize: 12, color: isWarm ? '#64748B' : T.muted, marginTop: 2 }}>Select a profile to use</Text>
               </View>
               <TouchableOpacity onPress={() => setModalVisible(false)} style={{ padding: 4 }}>
                 <Text style={{ color: isWarm ? '#64748B' : T.muted, fontSize: 22 }}>✕</Text>
@@ -533,10 +586,10 @@ export const SocietySwitcher = ({ style, theme = 'dark', flatNumber }: any) => {
                     <Text style={{ fontSize: 24, marginRight: 12 }}>🏢</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: isSelected ? '#0284C7' : (isWarm ? '#1E293B' : T.text), fontWeight: '800', fontSize: 15 }}>
-                        {s.name}
+                        {s.society_name}
                       </Text>
                       <Text style={{ color: isWarm ? '#64748B' : T.muted, fontSize: 12, marginTop: 2 }}>
-                        {s.city ? `${s.city} · ` : ''}{s.total_flats} Flats
+                        {s.role.charAt(0).toUpperCase() + s.role.slice(1)} {s.flat_number ? `· Flat ${s.flat_number}` : ''}
                       </Text>
                     </View>
                     {isSelected && (

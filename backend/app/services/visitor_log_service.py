@@ -167,6 +167,15 @@ class VisitorLogService:
         # Resolve exit gate in society
         exit_gate_id = self._resolve_exit_gate(data["entry_gate_id"], data["entry_mode"], society_id=society_id)
 
+        # Resolve active guard from Gate Session (Kiosk Mode Support)
+        from app.repositories import GateSessionRepository
+        session_repo = GateSessionRepository(self.db)
+        active_sessions = session_repo.get_all_active()
+        gate_session = next((s for s in active_sessions if s.gate_id == int(data["entry_gate_id"])), None)
+        
+        actual_guard_id = gate_session.guard_id if gate_session else guard_id
+        actual_guard_name = gate_session.guard_name if gate_session else None
+
         # Create log
         log = VisitorLog(
             society_id            = society_id,
@@ -176,7 +185,8 @@ class VisitorLogService:
             entry_gate_id         = data["entry_gate_id"],
             entry_mode            = data["entry_mode"],
             vehicle_number        = data.get("vehicle_number"),
-            registered_by_guard   = guard_id,
+            registered_by_guard   = actual_guard_id,
+            guard_name            = actual_guard_name,
             approval_source       = "guard_initiated",
             approval_status       = "pending",
             purpose               = data["purpose"],
