@@ -7,6 +7,7 @@ Includes multi-tenancy scoping by society_id across all tenant models.
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 from app.repositories.base import BaseRepository
 from app.models import (
     Society, SocietyAdmin, User, Flat, FlatUser, Guard, Visitor, VisitorLog,
@@ -391,6 +392,12 @@ class VisitorLogRepository(BaseRepository):
             q = q.filter(VisitorLog.created_at >= filters["from_date"])
         if filters.get("to_date"):
             q = q.filter(VisitorLog.created_at <= filters["to_date"])
+
+        # ⚡ Bolt Optimization: Mitigate N+1 query performance bottleneck
+        # The .to_dict() method accessed lazy-loaded relationships (visitor and flat), causing N+1 queries.
+        # joinedload eagerly loads these relationships in a single query.
+        q = q.options(joinedload(VisitorLog.visitor), joinedload(VisitorLog.flat))
+
         q = q.order_by(VisitorLog.created_at.desc())
         return self.paginate(page=page, per_page=per_page, query=q)
 
