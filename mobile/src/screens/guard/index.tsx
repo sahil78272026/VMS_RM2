@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, Text, Alert, ScrollView, BackHandler, PanResponder, Dimensions, Animated, TouchableOpacity, RefreshControl, TextInput, Platform, Image } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { VisitorLogService, GateSessionService, GateService, FlatService, PreApprovalService, GuardService } from '../../services';
@@ -103,6 +104,7 @@ export function GuardDashboard({ navigation }: any) {
   const [verifyingPass, setVerifyingPass] = useState(false);
   const [selectedGuard, setSelectedGuard] = useState<any>(null);
   const [pinModal, setPinModal] = useState(false);
+  const [showPinInput, setShowPinInput] = useState(false);
   const [pinCode, setPinCode] = useState('');
   const [targetGateId, setTargetGateId] = useState('');
   const [availableGuards, setAvailableGuards] = useState<any[]>([]);
@@ -111,30 +113,44 @@ export function GuardDashboard({ navigation }: any) {
 
   const load = useCallback(async () => {
     try {
-      const [lr, pr, ir, sr, gr, fr, guardRes] = await Promise.all([
-        VisitorLogService.getLogs().catch(() => ({ data: { data: [] } })),
-        VisitorLogService.getPending().catch(() => ({ data: { data: [] } })),
-        VisitorLogService.getInside().catch(() => ({ data: { data: [] } })),
+      // 1. Fetch Session & Metadata needed for Shift Start
+      const [sr, gr, guardRes] = await Promise.all([
         GateSessionService.getActive().catch(() => ({ data: { data: [] } })),
         GateService.getAll().catch(() => ({ data: { data: [] } })),
-        FlatService.getAll({ per_page: 5000, society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
-        GuardService.getAll({ per_page: 50, society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
+        GuardService.getAll({ per_page: 50 }).catch(() => ({ data: { data: [] } })),
       ]);
-      setLogs(lr.data?.data?.items || lr.data?.data || []);
-      setPending(pr.data?.data || []);
-      setInside(ir.data?.data || []);
-      const sessions = sr.data?.data || [];
-      setSession(sessions.find((s: any) => !s.shift_end) || null);
-      setGates(gr.data?.data?.items || gr.data?.data || []);
-      const rawFlats = fr.data?.data?.items || fr.data?.data || [];
-      rawFlats.sort((a: any, b: any) => a.flat_number.localeCompare(b.flat_number, undefined, { numeric: true, sensitivity: 'base' }));
-      setFlats(rawFlats);
       
+      const sessions = sr.data?.data || [];
+      const activeSession = sessions.find((s: any) => !s.shift_end) || null;
+      setSession(activeSession);
+      const fetchedGates = gr.data?.data?.items || gr.data?.data || [];
+      setGates(fetchedGates);
+      if (fetchedGates.length === 1) {
+        setTargetGateId(fetchedGates[0].id);
+      }
       const rawGuards = guardRes.data?.data?.items || guardRes.data?.data || [];
-      setAvailableGuards(rawGuards.filter((g: any) => g.user_id !== user?.id));
+      console.log('DEBUG: rawGuards', rawGuards, 'gates', fetchedGates); setAvailableGuards(rawGuards.filter((g: any) => g.user_id !== user?.id));
+
+      // 2. ONLY if shift is active, fetch Heavy Data
+      if (activeSession) {
+        const [lr, pr, ir, fr] = await Promise.all([
+          VisitorLogService.getLogs().catch(() => ({ data: { data: [] } })),
+          VisitorLogService.getPending().catch(() => ({ data: { data: [] } })),
+          VisitorLogService.getInside().catch(() => ({ data: { data: [] } })),
+          FlatService.getAll({ per_page: 5000, society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
+        ]);
+        setLogs(lr.data?.data?.items || lr.data?.data || []);
+        setPending(pr.data?.data || []);
+        setInside(ir.data?.data || []);
+        const rawFlats = fr.data?.data?.items || fr.data?.data || [];
+        rawFlats.sort((a: any, b: any) => a.flat_number.localeCompare(b.flat_number, undefined, { numeric: true, sensitivity: 'base' }));
+        setFlats(rawFlats);
+      } else {
+        setLogs([]); setPending([]); setInside([]); setFlats([]);
+      }
     } catch {}
     setLoading(false);
-  }, [activeSocietyId]);
+  }, [activeSocietyId, user?.id]);
 
   useEffect(() => {
     load();
@@ -151,29 +167,30 @@ export function GuardDashboard({ navigation }: any) {
   const confirmStartShift = async () => {
     if (!targetGateId) {
       if (Platform.OS === 'web') window.alert('Please select a gate.');
-      else Alert.alert('Error', 'Please select a gate.');
+      else Toast.show({ type: 'error', text1: 'Error', text2: 'Please select a gate.' });
       return;
     }
     if (!selectedGuard) {
       if (Platform.OS === 'web') window.alert('Please select your name.');
-      else Alert.alert('Error', 'Please select your name.');
+      else Toast.show({ type: 'error', text1: 'Error', text2: 'Please select your name.' });
       return;
     }
     if (!pinCode || pinCode.length !== 4 || !/^\d{4}$/.test(pinCode)) {
       if (Platform.OS === 'web') window.alert('Please enter a valid 4-digit PIN.');
-      else Alert.alert('Invalid PIN', 'Please enter a valid 4-digit PIN containing only numbers.');
+      else Toast.show({ type: 'error', text1: 'Invalid PIN', text2: 'Please enter a valid 4-digit PIN containing only numbers.' });
       return;
     }
     try {
       const gName = selectedGuard.user?.name || `Guard ${selectedGuard.employee_id}`;
       await GateSessionService.startShift(targetGateId, gName, selectedGuard.id, pinCode.trim());
       setPinModal(false);
+      setShowPinInput(false);
       setPinCode('');
       load();
     } catch (err: any) {
       const msg = err.response?.data?.message || 'Failed to start gate shift';
       if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert('Error', msg);
+      else Toast.show({ type: 'error', text1: 'Error', text2: msg });
     }
   };
 
@@ -183,7 +200,7 @@ export function GuardDashboard({ navigation }: any) {
       setSelectedGuard(null);
       load();
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to end gate shift');
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to end gate shift' });
     }
   };
 
@@ -192,7 +209,7 @@ export function GuardDashboard({ navigation }: any) {
       await VisitorLogService.confirmEntry(id, {});
       load();
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to confirm entry');
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to confirm entry' });
     }
   };
 
@@ -201,13 +218,16 @@ export function GuardDashboard({ navigation }: any) {
       await VisitorLogService.confirmExit(id);
       load();
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to confirm exit');
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to confirm exit' });
     }
   };
 
   const registerVisitor = async () => {
     if (!form.visitor_name || !form.visitor_phone || !form.flat_id) {
-      return Alert.alert('Missing Fields', 'Please enter visitor name, phone, and select flat.');
+      return Toast.show({ type: 'error', text1: 'Missing Fields', text2: 'Please enter visitor name, phone, and select flat.' });
+    }
+    if (form.visitor_phone.length !== 10) {
+      return Toast.show({ type: 'error', text1: 'Invalid Phone', text2: 'Please enter a valid 10-digit mobile number.' });
     }
     try {
       await VisitorLogService.create({
@@ -215,19 +235,19 @@ export function GuardDashboard({ navigation }: any) {
         flat_id: parseInt(form.flat_id),
         entry_gate_id: session?.gate_id || gates[0]?.id,
       });
-      Alert.alert('Visitor Logged', 'Resident notified! Awaiting confirmation.');
+      Toast.show({ type: 'error', text1: 'Visitor Logged', text2: 'Resident notified! Awaiting confirmation.' });
       setForm({ entry_mode: 'foot', stay_duration: '1_2hr', purpose: 'Guest' });
       setCurrentTab('dashboard');
       load();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Registration failed');
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Registration failed' });
     }
   };
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Needed', 'Camera permission is required to take visitor photos.');
+      Toast.show({ type: 'error', text1: 'Permission Needed', text2: 'Camera permission is required to take visitor photos.' });
       return;
     }
 
@@ -246,23 +266,23 @@ export function GuardDashboard({ navigation }: any) {
 
   const verifyPasscodeLookup = async () => {
     if (!passcode || passcode.trim().length < 4) {
-      return Alert.alert('Invalid Code', 'Please enter the 4 to 6-digit visitor pass code.');
+      return Toast.show({ type: 'error', text1: 'Invalid Code', text2: 'Please enter the 4 to 6-digit visitor pass code.' });
     }
     setVerifyingPass(true);
     try {
       // Find matching active pre-approval or verify
       const res = await PreApprovalService.verifyPasscode(passcode.trim()).catch(() => null);
       if (res?.data?.data) {
-        Alert.alert('Pass Verified ✅', `Pre-approved entry for ${res.data.data.visitor_name} to Flat ${res.data.data.flat?.flat_number || ''}`);
+        Toast.show({ type: 'success', text1: 'Pass Verified ✅', text2: `Pre-approved entry for ${res.data.data.visitor_name} to Flat ${res.data.data.flat?.flat_number || ''}` });
         setPasscode('');
         load();
       } else {
-        Alert.alert('Passcode Status', `Checked code "${passcode.trim()}". If valid, resident pre-clearance recorded.`);
+        Toast.show({ type: 'error', text1: 'Passcode Status', text2: `Checked code "${passcode.trim()}". If valid, resident pre-clearance recorded.` });
         setPasscode('');
         load();
       }
     } catch (err: any) {
-      Alert.alert('Verification Failed', err.response?.data?.message || 'Passcode not found or expired.');
+      Toast.show({ type: 'error', text1: 'Verification Failed', text2: err.response?.data?.message || 'Passcode not found or expired.' });
     } finally {
       setVerifyingPass(false);
     }
@@ -282,27 +302,44 @@ export function GuardDashboard({ navigation }: any) {
         <View>
           {/* Shift Banner */}
           {!session ? (
-            <View style={{
-              backgroundColor: Warm.amberDim,
-              borderColor: Warm.amber + '44',
-              borderWidth: 1,
-              padding: 32,
-              borderRadius: 18,
-              marginBottom: 18,
-              alignItems: 'center',
-            }}>
-              <Text style={{ fontSize: 48, marginBottom: 16 }}>🛡️</Text>
-              <Text style={{ color: '#B45309', fontWeight: '800', fontSize: 20, marginBottom: 8, textAlign: 'center' }}>
-                Terminal Standby
-              </Text>
-              <Text style={{ color: '#92400E', fontSize: 14, marginBottom: 24, textAlign: 'center' }}>
-                No active shift is currently recorded on this terminal.
-              </Text>
-              <Btn full variant="amber" onClick={() => setPinModal(true)} style={{ paddingVertical: 14 }}>
-                START SHIFT
-              </Btn>
-              <TouchableOpacity onPress={logout} style={{ marginTop: 16, padding: 8 }}>
-                <Text style={{ color: Warm.red, fontWeight: '700', fontSize: 14 }}>Log Out of Terminal</Text>
+            <View>
+              <View style={{
+                backgroundColor: Warm.amberDim,
+                borderColor: Warm.amber + '44',
+                borderWidth: 1,
+                padding: 32,
+                borderRadius: 18,
+                marginBottom: 18,
+                alignItems: 'center',
+              }}>
+                <Text style={{ fontSize: 48, marginBottom: 16 }}>🛡️</Text>
+                <Text style={{ color: '#B45309', fontWeight: '800', fontSize: 20, marginBottom: 8, textAlign: 'center' }}>
+                  Terminal Standby
+                </Text>
+                <Text style={{ color: '#92400E', fontSize: 14, marginBottom: 24, textAlign: 'center' }}>
+                  No active shift is currently recorded on this terminal.
+                </Text>
+                <Btn full variant="amber" onClick={() => setPinModal(true)} style={{ paddingVertical: 14 }}>
+                  START SHIFT
+                </Btn>
+              </View>
+
+              <TouchableOpacity
+                onPress={logout}
+                style={{
+                  backgroundColor: Warm.redDim,
+                  borderColor: Warm.red + '44',
+                  borderWidth: 1,
+                  padding: 20,
+                  borderRadius: 18,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 10
+                }}
+              >
+                <Text style={{ fontSize: 20 }}>🚪</Text>
+                <Text style={{ color: Warm.red, fontWeight: '800', fontSize: 18 }}>LOG OUT</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -959,35 +996,128 @@ export function GuardDashboard({ navigation }: any) {
           subtitle="Select your profile and gate to take over." 
           onClose={() => { setPinModal(false); setPinCode(''); setSelectedGuard(null); setTargetGateId(''); }}
         >
-          <Select
-            label="1. Select Gate"
-            placeholder="Choose Gate..."
-            value={targetGateId}
-            onChange={(v: string) => setTargetGateId(v)}
-            options={gates.map((g: any) => ({ label: g.name, value: g.id }))}
-          />
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ fontSize: 12, color: Warm.textMuted, textTransform: 'uppercase', marginBottom: 8, fontWeight: '600' }}>1. Select Gate</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {gates.map((g: any) => {
+                const isSelected = String(targetGateId) === String(g.id);
+                return (
+                  <TouchableOpacity
+                    key={g.id}
+                    onPress={() => setTargetGateId(g.id)}
+                    style={{
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 12,
+                      backgroundColor: isSelected ? Warm.accent : Warm.cardSubtle,
+                      borderColor: isSelected ? Warm.accent : Warm.cardBorder,
+                      borderWidth: 1,
+                    }}
+                  >
+                    <Text style={{
+                      color: isSelected ? '#FFFFFF' : Warm.text,
+                      fontWeight: isSelected ? '800' : '600',
+                      fontSize: 14,
+                    }}>
+                      {g.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
           
-          <Select
-            label="2. Select Guard"
-            placeholder="Choose Your Name..."
-            value={selectedGuard?.id}
-            onChange={(v: string) => setSelectedGuard(availableGuards.find((g: any) => g.id === v) || null)}
-            options={availableGuards.map((g: any) => ({ label: g.user?.name || `Guard ${g.employee_id}`, value: g.id }))}
-          />
+          <View style={{ marginBottom: 16 }}>
+            <Text style={{ fontSize: 12, color: Warm.textMuted, textTransform: 'uppercase', marginBottom: 8, fontWeight: '600' }}>2. Select Guard</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {availableGuards.map((g: any) => {
+                const isSelected = String(selectedGuard?.id) === String(g.id);
+                return (
+                  <TouchableOpacity
+                    key={g.id}
+                    onPress={() => {
+                      if (!targetGateId) {
+                        if (Platform.OS === 'web') window.alert('Please select a gate first.');
+                        else Toast.show({ type: 'error', text1: 'Error', text2: 'Please select a gate first.' });
+                        return;
+                      }
+                      setSelectedGuard(g);
+                      setShowPinInput(true);
+                    }}
+                    style={{
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      borderRadius: 12,
+                      backgroundColor: isSelected ? Warm.accent : Warm.cardSubtle,
+                      borderColor: isSelected ? Warm.accent : Warm.cardBorder,
+                      borderWidth: 1,
+                    }}
+                  >
+                    <Text style={{
+                      color: isSelected ? '#FFFFFF' : Warm.text,
+                      fontWeight: isSelected ? '800' : '600',
+                      fontSize: 14,
+                    }}>
+                      {g.user?.name || `Guard ${g.employee_id}`}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
 
-          <Input
-            label="3. 4-Digit Secure PIN *"
-            placeholder="● ● ● ●"
-            keyboardType="number-pad"
-            maxLength={4}
-            secureTextEntry={true}
-            value={pinCode}
-            onChange={(v: string) => setPinCode(v.replace(/[^0-9]/g, ''))}
-            style={{ fontSize: 24, letterSpacing: 8, textAlign: 'center', marginTop: 8 }}
-          />
-          <Btn full variant="green" onClick={confirmStartShift} style={{ marginTop: 12, paddingVertical: 14 }}>
-            Verify & Start Shift →
-          </Btn>
+          {/* PIN Input and Verify button are moved to a secondary modal */}
+        </Modal>
+      )}
+
+      {/* ── PIN Input Modal ── */}
+      {showPinInput && (
+        <Modal 
+          title="Enter Your PIN" 
+          subtitle={`To start shift as ${selectedGuard?.user?.name || 'Guard'}`}
+          onClose={() => { setShowPinInput(false); setPinCode(''); setSelectedGuard(null); }}
+        >
+          <View style={{ alignItems: 'center', marginVertical: 10 }}>
+            <View style={{ flexDirection: 'row', gap: 16, marginBottom: 30 }}>
+              {[0, 1, 2, 3].map(i => (
+                <View key={i} style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: pinCode.length > i ? Warm.accent : Warm.cardBorder }} />
+              ))}
+            </View>
+
+            <View style={{ width: 280, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'DEL', '0', 'OK'].map(key => {
+                const isAction = key === 'DEL' || key === 'OK';
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => {
+                      if (key === 'DEL') {
+                        setPinCode(prev => prev.slice(0, -1));
+                      } else if (key === 'OK') {
+                        confirmStartShift();
+                      } else {
+                        if (pinCode.length < 4) setPinCode(prev => prev + key);
+                      }
+                    }}
+                    style={{
+                      width: '30%',
+                      aspectRatio: 1.8,
+                      backgroundColor: key === 'OK' ? Warm.green : isAction ? Warm.cardSubtle : Warm.cardBg,
+                      borderColor: Warm.cardBorder,
+                      borderWidth: 1,
+                      borderRadius: 12,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginBottom: 12,
+                      ...Warm.shadow,
+                    }}
+                  >
+                    <Text style={{ fontSize: isAction ? 14 : 24, fontWeight: '800', color: key === 'OK' ? '#FFFFFF' : Warm.text }}>{key}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
         </Modal>
       )}
 

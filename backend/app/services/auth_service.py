@@ -100,17 +100,21 @@ class AuthService:
     def get_user_societies(self, user: User) -> list:
         """Returns list of all societies this user belongs to or can access."""
         if user.is_super_admin:
-            all_societies = self.society_repo.get_all_active()
+            from app.models import Society
+            all_societies = self.society_repo.db.query(Society).all()
             return [{
                 "id": f"{s.id}_super_admin",
                 "society_id": s.id,
                 "society_name": s.name,
                 "society_slug": s.slug,
+                "society_status": s.status,
                 "role": "super_admin"
             } for s in all_societies]
         
         # For regular users, the profiles are already generated accurately in user.to_dict()
-        return user.to_dict().get("societies", [])
+        user_societies = user.to_dict().get("societies", [])
+        # Filter out suspended societies for normal users
+        return [s for s in user_societies if s.get("society_status") != "suspended"]
 
     def login(self, phone: str, password: str, expo_push_token: str = None, requested_society_id: int = None) -> dict:
         user = self.user_repo.get_by_phone(phone.strip())
@@ -133,6 +137,10 @@ class AuthService:
         self.user_repo.save(user)
 
         user_societies = self.get_user_societies(user)
+        raw_societies = user.to_dict().get("societies", [])
+
+        if raw_societies and not user_societies and not user.is_super_admin:
+            raise ForbiddenError("Your society access has been suspended or is unavailable. Please contact the administrator.")
 
         # Resolve active_society_id
         active_society_id = None
@@ -207,6 +215,10 @@ class AuthService:
         self.user_repo.save(user)
 
         user_societies = self.get_user_societies(user)
+        raw_societies = user.to_dict().get("societies", [])
+
+        if raw_societies and not user_societies and not user.is_super_admin:
+            raise ForbiddenError("Your society access has been suspended or is unavailable. Please contact the administrator.")
 
         active_society_id = None
         if requested_society_id:

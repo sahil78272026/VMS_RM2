@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, FlatUser, Flat, Guard, SocietyAdmin
 from app.utils.response import success, error
+from app.api.deps import get_current_user
 from app.utils.security import JWT_SECRET_KEY, ALGORITHM
 import jwt
 
@@ -65,3 +66,19 @@ def get_users(
         return success("Users fetched", data=[u.to_dict(include_sensitive=False) for u in users])
     except Exception as e:
         return error("Failed to fetch users", "SERVER_ERROR", str(e), 500)
+
+@router.patch("/me/notifications")
+async def toggle_notifications(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Toggle mute/unmute notifications for the current user."""
+    try:
+        data = await request.json()
+        mute = data.get("muted", False)
+        current_user.notifications_muted = mute
+        db.commit()
+        return success("Notification settings updated", data={"notifications_muted": current_user.notifications_muted})
+    except Exception as e:
+        return error("Failed to update notification settings", "SERVER_ERROR", str(e), 500)

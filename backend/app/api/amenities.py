@@ -37,3 +37,48 @@ def get_amenities(
 ):
     amenities = db.query(Amenity).filter(Amenity.society_id == society_id).all()
     return success(message="Amenities fetched successfully", data=[a.to_dict() for a in amenities])
+
+@router.patch("/{amenity_id}", response_model=dict)
+def update_amenity(
+    amenity_id: int,
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles("admin", "society_admin")),
+    society_id: int = Depends(get_active_society_id)
+):
+    if user.role != "super_admin":
+        is_admin = db.query(SocietyAdmin).filter_by(user_id=user.id, society_id=society_id).first()
+        if not is_admin:
+            raise ForbiddenError("Not authorized for this society")
+            
+    amenity = db.query(Amenity).filter(Amenity.id == amenity_id, Amenity.society_id == society_id).first()
+    if not amenity:
+        raise NotFoundError("Amenity not found")
+        
+    for key, value in data.items():
+        if hasattr(amenity, key) and key != "id" and key != "society_id":
+            setattr(amenity, key, value)
+            
+    db.commit()
+    db.refresh(amenity)
+    return success(message="Amenity updated successfully", data=amenity.to_dict())
+
+@router.delete("/{amenity_id}", response_model=dict)
+def delete_amenity(
+    amenity_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles("admin", "society_admin")),
+    society_id: int = Depends(get_active_society_id)
+):
+    if user.role != "super_admin":
+        is_admin = db.query(SocietyAdmin).filter_by(user_id=user.id, society_id=society_id).first()
+        if not is_admin:
+            raise ForbiddenError("Not authorized for this society")
+            
+    amenity = db.query(Amenity).filter(Amenity.id == amenity_id, Amenity.society_id == society_id).first()
+    if not amenity:
+        raise NotFoundError("Amenity not found")
+        
+    db.delete(amenity)
+    db.commit()
+    return success(message="Amenity deleted successfully")

@@ -128,11 +128,12 @@ class NotificationService:
                 visitor_log_id = log.id,
             )
 
-            # Push notification
-            self._send_push(user.id, "Visitor at Gate 🔔", message)
+            if not user.notifications_muted:
+                # Push notification
+                self._send_push(user.id, "Visitor at Gate 🔔", message)
 
-            # SMS fallback
-            self._send_sms(user.phone, message)
+                # SMS fallback
+                self._send_sms(user.phone, message)
 
             logger.info(f"[NOTIF] Approval request sent to user {user.id} for log {log.id}")
 

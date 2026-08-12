@@ -135,9 +135,12 @@ export const AnnouncementService = {
 
 export const UserService = {
   getAll: (p?: any) => api.get('/users', { params: p }),
+  toggleNotifications: (muted: boolean) => api.patch('/users/me/notifications', { muted }),
 };
 
 export const AmenityService = {
   getAll: (p?: any) => api.get('/amenities', { params: p }),
   create: (d: any, society_id: string | number) => api.post(`/amenities?society_id=${society_id}`, d),
+  update: (id: string, d: any) => api.patch(`/amenities/${id}`, d),
+  delete: (id: string) => api.delete(`/amenities/${id}`),
 };

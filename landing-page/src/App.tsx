@@ -95,6 +95,11 @@ export default function App() {
       setError('Please provide a photo');
       return;
     }
+    const phoneRegex = /^[0-9]{10}$/;
+    if (!phoneRegex.test(form.visitor_phone)) {
+      setError('Please enter a valid 10-digit mobile number');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -199,7 +204,10 @@ export default function App() {
           </div>
           <div className="form-group">
             <label>Phone Number</label>
-            <input required type="tel" placeholder="Mobile Number" value={form.visitor_phone} onChange={e => set('visitor_phone')(e.target.value)} />
+            <input required type="tel" maxLength={10} placeholder="10-digit Mobile Number" value={form.visitor_phone} onChange={e => {
+              const val = e.target.value.replace(/[^0-9]/g, '');
+              set('visitor_phone')(val);
+            }} />
           </div>
           <div className="form-group">
             <label>Flat to Visit</label>

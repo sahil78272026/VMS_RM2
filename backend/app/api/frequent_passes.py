@@ -7,7 +7,7 @@ Guards verify passes at the gate.
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_active_society_id
 
 from app.services.frequent_pass_service import FrequentPassService
 from app.repositories import FlatUserRepository
@@ -19,13 +19,18 @@ from app.utils.exceptions import AppException
 router = APIRouter(prefix="/api/v1/frequent-passes", tags=["frequent-passes"])
 
 @router.get("/my")
-async def get_my_passes(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+async def get_my_passes(
+    request: Request,
+    society_id: int = Depends(get_active_society_id),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     """Resident: list all their frequent passes."""
     try:
         flat_user_repo = FlatUserRepository(db)
         frequent_pass_service = FrequentPassService(db)
         user_id   = current_user.id
-        flat_user = flat_user_repo.get_by_user(user_id)
+        flat_user = flat_user_repo.get_by_user(user_id, society_id=society_id)
         if not flat_user:
             return error("Flat not found", "NOT_FOUND", status_code=404)
 
@@ -38,7 +43,12 @@ async def get_my_passes(request: Request, db: Session = Depends(get_db), current
 
 
 @router.post("")
-async def create_pass(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+async def create_pass(
+    request: Request,
+    society_id: int = Depends(get_active_society_id),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     """
     Resident: create a frequent pass for daily staff.
     e.g. Maid allowed Mon-Fri 8AM-10AM indefinitely.
@@ -47,12 +57,12 @@ async def create_pass(request: Request, db: Session = Depends(get_db), current_u
         flat_user_repo = FlatUserRepository(db)
         frequent_pass_service = FrequentPassService(db)
         user_id   = current_user.id
-        flat_user = flat_user_repo.get_by_user(user_id)
+        flat_user = flat_user_repo.get_by_user(user_id, society_id=society_id)
         if not flat_user:
             return error("Flat not found", "NOT_FOUND", status_code=404)
 
         data       = await request.json()
-        freq_pass  = frequent_pass_service.create(flat_user.id, data)
+        freq_pass  = frequent_pass_service.create(society_id, flat_user.id, data)
         return success("Frequent pass created", data=freq_pass.to_dict(), status_code=201)
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)
@@ -61,13 +71,19 @@ async def create_pass(request: Request, db: Session = Depends(get_db), current_u
 
 
 @router.patch("/{pass_id}")
-async def update_pass(pass_id: int, request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+async def update_pass(
+    pass_id: int,
+    request: Request,
+    society_id: int = Depends(get_active_society_id),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     """Resident: update pass details or time window."""
     try:
         flat_user_repo = FlatUserRepository(db)
         frequent_pass_service = FrequentPassService(db)
         user_id   = current_user.id
-        flat_user = flat_user_repo.get_by_user(user_id)
+        flat_user = flat_user_repo.get_by_user(user_id, society_id=society_id)
         data      = await request.json()
         freq_pass = frequent_pass_service.update(flat_user.id, pass_id, data)
         return success("Pass updated", data=freq_pass.to_dict())
@@ -78,7 +94,13 @@ async def update_pass(pass_id: int, request: Request, db: Session = Depends(get_
 
 
 @router.patch("/{pass_id}/suspend")
-async def suspend_pass(pass_id: int, request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+async def suspend_pass(
+    pass_id: int,
+    request: Request,
+    society_id: int = Depends(get_active_society_id),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     """
     Resident: temporarily suspend a pass.
     e.g. maid is on leave for a week.
@@ -87,7 +109,7 @@ async def suspend_pass(pass_id: int, request: Request, db: Session = Depends(get
         flat_user_repo = FlatUserRepository(db)
         frequent_pass_service = FrequentPassService(db)
         user_id   = current_user.id
-        flat_user = flat_user_repo.get_by_user(user_id)
+        flat_user = flat_user_repo.get_by_user(user_id, society_id=society_id)
         freq_pass = frequent_pass_service.suspend(flat_user.id, pass_id)
         return success("Pass suspended", data=freq_pass.to_dict())
     except AppException as e:
@@ -97,13 +119,19 @@ async def suspend_pass(pass_id: int, request: Request, db: Session = Depends(get
 
 
 @router.patch("/{pass_id}/activate")
-async def activate_pass(pass_id: int, request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+async def activate_pass(
+    pass_id: int,
+    request: Request,
+    society_id: int = Depends(get_active_society_id),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     """Resident: reactivate a suspended pass."""
     try:
         flat_user_repo = FlatUserRepository(db)
         frequent_pass_service = FrequentPassService(db)
         user_id   = current_user.id
-        flat_user = flat_user_repo.get_by_user(user_id)
+        flat_user = flat_user_repo.get_by_user(user_id, society_id=society_id)
         freq_pass = frequent_pass_service.activate(flat_user.id, pass_id)
         return success("Pass activated", data=freq_pass.to_dict())
     except AppException as e:
@@ -113,13 +141,19 @@ async def activate_pass(pass_id: int, request: Request, db: Session = Depends(ge
 
 
 @router.delete("/{pass_id}")
-async def delete_pass(pass_id: int, request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+async def delete_pass(
+    pass_id: int,
+    request: Request,
+    society_id: int = Depends(get_active_society_id),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     """Resident: permanently remove a frequent pass."""
     try:
         flat_user_repo = FlatUserRepository(db)
         frequent_pass_service = FrequentPassService(db)
         user_id   = current_user.id
-        flat_user = flat_user_repo.get_by_user(user_id)
+        flat_user = flat_user_repo.get_by_user(user_id, society_id=society_id)
         frequent_pass_service.delete(flat_user.id, pass_id)
         return success("Pass removed")
     except AppException as e:

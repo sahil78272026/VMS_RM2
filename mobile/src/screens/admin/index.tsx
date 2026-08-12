@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, Text, Alert, ScrollView, BackHandler, PanResponder, Dimensions, ActivityIndicator, TouchableOpacity, Animated, RefreshControl } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { T, Card, Btn, StatCard, EmptyState, LoadingScreen, Tabs, Avatar, Badge, Input, Select, Modal, SocietySwitcher } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
@@ -105,6 +106,7 @@ export function AdminDashboard({ navigation }: any) {
   
   const [modal, setModal] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
+  const [saving, setSaving] = useState(false);
 
   const isLoadingRef = useRef(false);
 
@@ -181,50 +183,57 @@ export function AdminDashboard({ navigation }: any) {
         is_owner: true,
         move_in_date: userToApprove.move_in_date || new Date().toISOString().split('T')[0],
       });
-      Alert.alert('Resident Verified', `${userToApprove.name} has been approved.`);
+      Toast.show({ type: 'success', text1: 'Resident Verified', text2: `${userToApprove.name} has been approved.` });
       load();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to approve resident');
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to approve resident' });
     }
   };
 
   const createGuard = async () => {
     if (!form.name || !form.phone || !form.employee_id) {
-      return Alert.alert('Error', 'Please fill all required guard details');
+      return Toast.show({ type: 'error', text1: 'Error', text2: 'Please fill all required guard details' });
     }
+    if (form.phone.length !== 10) {
+      return Toast.show({ type: 'error', text1: 'Invalid Phone', text2: 'Please enter a valid 10-digit mobile number.' });
+    }
+    setSaving(true);
     try {
       await GuardService.create({ ...form });
-      Alert.alert('Success', 'Guard account created successfully.');
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Guard account created successfully.' });
       setModal(null);
       setForm({});
       load();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to create guard');
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to create guard' });
+    } finally {
+      setSaving(false);
     }
   };
 
   const approvePayment = async (id: string) => {
     try {
       await MaintenanceService.approve(id);
-      Alert.alert('Payment Verified', 'Maintenance payment approved.');
+      Toast.show({ type: 'success', text1: 'Payment Verified', text2: 'Maintenance payment approved.' });
       load();
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to approve payment');
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to approve payment' });
     }
   };
 
   const rejectPayment = async (id: string) => {
     try {
       await MaintenanceService.reject(id);
-      Alert.alert('Payment Rejected', 'Payment entry has been marked rejected.');
+      Toast.show({ type: 'error', text1: 'Payment Rejected', text2: 'Payment entry has been marked rejected.' });
       load();
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to reject payment');
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to reject payment' });
     }
   };
 
     const createService = async () => {
-    if (!form.name) return Alert.alert('Error', 'Please enter a name for the amenity/service');
+    if (!form.name) return Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter a name for the amenity/service' });
+    setSaving(true);
     try {
       await AmenityService.create({
         name: form.name,
@@ -234,12 +243,34 @@ export function AdminDashboard({ navigation }: any) {
         timing: form.timing || null,
         status: form.status || 'active'
       }, activeSocietyId);
-      Alert.alert('Success', 'Service created successfully.');
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Service created successfully.' });
       setModal(null);
       setForm({});
       load();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to create service');
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to create service' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deactivateGuard = async (id: string) => {
+    try {
+      await GuardService.deactivate(id);
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Guard deactivated.' });
+      load();
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed' });
+    }
+  };
+
+  const deleteService = async (id: string) => {
+    try {
+      await AmenityService.delete(id);
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Amenity deleted.' });
+      load();
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed' });
     }
   };
 
@@ -713,10 +744,15 @@ export function AdminDashboard({ navigation }: any) {
                   ID: {g.employee_id} · 📞 {g.user?.phone}
                 </Text>
               </View>
-              <View style={{ backgroundColor: g.shift === 'morning' ? Warm.amberDim : Warm.accentDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
-                <Text style={{ color: g.shift === 'morning' ? '#B45309' : Warm.accent, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' }}>
-                  {g.shift} Shift
-                </Text>
+              <View style={{ flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                <View style={{ backgroundColor: g.shift === 'morning' ? Warm.amberDim : Warm.accentDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                  <Text style={{ color: g.shift === 'morning' ? '#B45309' : Warm.accent, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' }}>
+                    {g.shift} Shift
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => deactivateGuard(g.id)} style={{ backgroundColor: Warm.redDim, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                  <Text style={{ color: Warm.red, fontSize: 10, fontWeight: '800' }}>DELETE</Text>
+                </TouchableOpacity>
               </View>
             </View>
           ))}
@@ -753,10 +789,15 @@ export function AdminDashboard({ navigation }: any) {
                   {s.contact_info && <Text style={{ color: Warm.accent, fontSize: 12, marginTop: 4, fontWeight: '600' }}>📞 {s.contact_info}</Text>}
                   {s.timing && <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>🕒 {s.timing}</Text>}
                 </View>
-                <View style={{ backgroundColor: s.status === 'active' ? Warm.greenDim : Warm.redDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
-                  <Text style={{ color: s.status === 'active' ? Warm.green : Warm.red, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' }}>
-                    {s.status}
-                  </Text>
+                <View style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                  <View style={{ backgroundColor: s.status === 'active' ? Warm.greenDim : Warm.redDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                    <Text style={{ color: s.status === 'active' ? Warm.green : Warm.red, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' }}>
+                      {s.status}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => deleteService(s.id)} style={{ backgroundColor: Warm.redDim, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
+                    <Text style={{ color: Warm.red, fontSize: 10, fontWeight: '800' }}>DELETE</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
@@ -878,7 +919,7 @@ export function AdminDashboard({ navigation }: any) {
         elevation: 8,
       }}>
         {[
-          { id: 'dashboard', label: 'Overview', icon: '📊' },
+          { id: 'dashboard', label: 'Manage', icon: '📊' },
           { id: 'residents', label: 'Residents', icon: '👥' },
           { id: 'maintenance', label: 'Dues', icon: '💰' },
           { id: 'guards', label: 'Guards', icon: '🛡️' },
@@ -951,7 +992,7 @@ export function AdminDashboard({ navigation }: any) {
               { value: 'night', label: 'Night Shift (18:00 - 06:00)' },
             ]}
           />
-          <Btn full variant="green" onClick={createGuard} style={{ marginTop: 12 }}>
+          <Btn full variant="green" onClick={createGuard} loading={saving} style={{ marginTop: 12 }}>
             Register Guard Account →
           </Btn>
         </Modal>
@@ -996,7 +1037,7 @@ export function AdminDashboard({ navigation }: any) {
             value={form?.description || ''}
             onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), description: v }))}
           />
-          <Btn full variant="green" onClick={createService} style={{ marginTop: 12 }}>
+          <Btn full variant="green" onClick={createService} loading={saving} style={{ marginTop: 12 }}>
             Save Amenity →
           </Btn>
         </Modal>

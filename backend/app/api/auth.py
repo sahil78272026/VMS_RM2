@@ -128,13 +128,45 @@ def switch_society(
 
 
 @router.post("/refresh")
-def refresh():
-    return {
-        "success": False,
-        "message": "Refresh token logic not yet implemented for FastAPI.",
-        "data": None,
-        "error": None
-    }
+def refresh(request: Request, db: Session = Depends(get_db)):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return error("No refresh token provided", "UNAUTHORIZED", status_code=401)
+    
+    raw_token = auth_header.split(" ")[1]
+    try:
+        import jwt
+        from app.utils.security import JWT_SECRET_KEY, ALGORITHM, create_access_token
+        payload = jwt.decode(raw_token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        
+        from app.models import User
+        user = db.query(User).filter_by(id=user_id).first()
+        if not user or user.status == "inactive":
+            return error("User inactive or not found", "UNAUTHORIZED", status_code=401)
+            
+        additional_claims = {
+            "role":              user.role,
+            "status":            user.status,
+            "name":              user.name,
+            "is_super_admin":    user.is_super_admin,
+            "active_society_id": payload.get("active_society_id"),
+        }
+        
+        new_access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
+        
+        return {
+            "success": True,
+            "message": "Token refreshed",
+            "data": {
+                "access_token": new_access_token
+            },
+            "error": None
+        }
+    except jwt.ExpiredSignatureError:
+        return error("Refresh token expired", "UNAUTHORIZED", status_code=401)
+    except jwt.InvalidTokenError:
+        return error("Invalid refresh token", "UNAUTHORIZED", status_code=401)
 
 
 @router.post("/logout")

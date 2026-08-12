@@ -142,8 +142,13 @@ class VisitorLogService:
         if errors:
             raise ValidationError(errors)
 
+        try:
+            flat_id = int(data["flat_id"])
+        except ValueError:
+            raise ValidationError({"flat_id": "Must be an integer"})
+
         # Check flat exists
-        flat = self.flat_repo.get_by_id(data["flat_id"])
+        flat = self.flat_repo.get_by_id(flat_id)
         if not flat:
             raise NotFoundError("Flat")
 
@@ -155,7 +160,7 @@ class VisitorLogService:
             raise BlacklistedVisitorError(reason=visitor.blacklist_reason)
 
         # Get primary resident of flat
-        flat_user = self.flat_user_repo.get_primary_by_flat(data["flat_id"])
+        flat_user = self.flat_user_repo.get_primary_by_flat(flat_id)
         if not flat_user:
             raise NotFoundError("Resident for this flat")
 
@@ -220,7 +225,12 @@ class VisitorLogService:
         if errors:
             raise ValidationError(errors)
 
-        flat = self.flat_repo.get_by_id(data["flat_id"])
+        try:
+            flat_id = int(data["flat_id"])
+        except ValueError:
+            raise ValidationError({"flat_id": "Must be an integer"})
+
+        flat = self.flat_repo.get_by_id(flat_id)
         if not flat:
             raise NotFoundError("Flat")
 
@@ -231,7 +241,7 @@ class VisitorLogService:
             visitor = self.visitor_repo.get_by_phone(data["visitor_phone"], society_id=society_id)
             raise BlacklistedVisitorError(reason=visitor.blacklist_reason)
 
-        flat_user = self.flat_user_repo.get_primary_by_flat(data["flat_id"])
+        flat_user = self.flat_user_repo.get_primary_by_flat(flat_id)
         if not flat_user:
             raise NotFoundError("Resident for this flat")
 

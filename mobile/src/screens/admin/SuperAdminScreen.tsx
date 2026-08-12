@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, Alert, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { T, Card, Btn, PageLayout, EmptyState, LoadingScreen, Modal, Badge, Input, Select } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
 import { SocietyService, FlatService } from '../../services';
@@ -97,7 +98,7 @@ function analyzeAndGenerateFlats(sample: string, config: any): { type: string; t
   }
 
   // 5. Default Sequential Range
-  const start = parseInt(config.start_num || (/^\d+$/.test(trimmed) ? trimmed : '101')) || 101;
+  const start = parseInt(config.start_num || (/^\d+$/.test(trimmed) ? trimmed : '1')) || 1;
   const end = parseInt(config.end_num || String(start + 49)) || (start + 49);
   const prefix = config.prefix || '';
 
@@ -131,6 +132,9 @@ export function SuperAdminScreen() {
   const [generatingFlats, setGeneratingFlats] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [showDeletePrompt, setShowDeletePrompt] = useState(false);
+  const [showSuspendPrompt, setShowSuspendPrompt] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFlatsList, setShowFlatsList] = useState(false);
 
   // New Society Form
   const [form, setForm] = useState<any>({
@@ -138,11 +142,12 @@ export function SuperAdminScreen() {
     slug: '',
     address: '',
     city: 'Noida',
+    pincode: '',
     sample_pattern: 'A-101',
     start_base: '67',
     end_base: '70',
     units_per_base: '6',
-    start_num: '101',
+    start_num: '1',
     end_num: '150',
     prefix: 'A-',
     floors: '20',
@@ -151,12 +156,12 @@ export function SuperAdminScreen() {
   });
 
   // Batch Flats Form
-  const [sampleInput, setSampleInput] = useState('A-101');
+  const [sampleInput, setSampleInput] = useState('1, 1A, 1B');
   const [patternConfig, setPatternConfig] = useState<any>({
     start_base: '1',
     end_base: '20',
     units_per_base: '8',
-    start_num: '101',
+    start_num: '1',
     end_num: '150',
     prefix: 'A-',
     floors: '20',
@@ -191,7 +196,7 @@ export function SuperAdminScreen() {
 
   const handleCreateSociety = async () => {
     if (!form.name || !form.slug) {
-      return Alert.alert('Error', 'Society name and identifier are required');
+      return Toast.show({ type: 'error', text1: 'Error', text2: 'Society name and identifier are required' });
     }
 
     try {
@@ -200,36 +205,37 @@ export function SuperAdminScreen() {
         slug: form.slug.toLowerCase().replace(/\s+/g, '-'),
         address: form.address,
         city: form.city,
+        pincode: form.pincode,
         total_flats: 0,
       });
 
       const newSociety = res.data?.data;
 
-      Alert.alert('Success', `"${form.name}" onboarded successfully! Add flats from the Manage menu.`);
+      Toast.show({ type: 'success', text1: 'Success', text2: `"${form.name}" onboarded successfully! Add flats from the Manage menu.` });
       setModal(null);
       load();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to onboard society');
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to onboard society' });
     }
   };
 
   const handleBatchFlats = async () => {
     if (!selectedSoc) return;
     if (generatedResult.list.length === 0) {
-      return Alert.alert('Error', 'No flats to generate');
+      return Toast.show({ type: 'error', text1: 'Error', text2: 'No flats to generate' });
     }
 
     setGeneratingFlats(true);
     try {
       await SocietyService.batchCreateFlats(selectedSoc.id, { flat_numbers: generatedResult.list });
-      Alert.alert('Success', `Added ${generatedResult.list.length} flats to ${selectedSoc.name}`);
+      Toast.show({ type: 'success', text1: 'Success', text2: `Added ${generatedResult.list.length} flats to ${selectedSoc.name}` });
       setModal(null);
       load();
       if (selectedSoc?.id) {
         openSocietyOverview(selectedSoc);
       }
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to create flats');
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to create flats' });
     } finally {
       setGeneratingFlats(false);
     }
@@ -237,51 +243,43 @@ export function SuperAdminScreen() {
 
   const handleSuspend = async () => {
     if (!selectedSoc) return;
-    Alert.alert(
-      'Suspend Society',
-      `Are you sure you want to suspend ${selectedSoc.name}? All users will be instantly locked out.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Suspend', style: 'destructive', onPress: async () => {
-            try {
-              await SocietyService.suspend(selectedSoc.id);
-              Alert.alert('Suspended', `${selectedSoc.name} has been suspended.`);
-              setModal(null);
-              load();
-            } catch (err: any) {
-              Alert.alert('Error', err.response?.data?.message || 'Failed to suspend society');
-            }
-        }}
-      ]
-    );
+    try {
+      await SocietyService.suspend(selectedSoc.id);
+      Toast.show({ type: 'error', text1: 'Suspended', text2: `${selectedSoc.name} has been suspended.` });
+      setShowSuspendPrompt(false);
+      setModal(null);
+      load();
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to suspend society' });
+    }
   };
 
   const handleActivate = async () => {
     if (!selectedSoc) return;
     try {
       await SocietyService.activate(selectedSoc.id);
-      Alert.alert('Activated', `${selectedSoc.name} is now active.`);
+      Toast.show({ type: 'success', text1: 'Activated', text2: `${selectedSoc.name} is now active.` });
       setModal(null);
       load();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to activate society');
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to activate society' });
     }
   };
 
   const handleDelete = async () => {
     if (!selectedSoc) return;
     if (deleteConfirmation.trim() !== selectedSoc.name) {
-      return Alert.alert('Verification Failed', `You must type exactly "${selectedSoc.name}" to delete.`);
+      return Toast.show({ type: 'error', text1: 'Verification Failed', text2: `You must type exactly "${selectedSoc.name}" to delete.` });
     }
     try {
       await SocietyService.delete(selectedSoc.id);
-      Alert.alert('Deleted', `${selectedSoc.name} and all associated data have been permanently destroyed.`);
+      Toast.show({ type: 'success', text1: 'Deleted', text2: `${selectedSoc.name} and all associated data have been permanently destroyed.` });
       setShowDeletePrompt(false);
       setDeleteConfirmation('');
       setModal(null);
       load();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to delete society');
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to delete society' });
     }
   };
 
@@ -290,6 +288,9 @@ export function SuperAdminScreen() {
     setModal('overview');
     setLoadingOverview(true);
     setShowAddAdmin(false);
+    setShowSuspendPrompt(false);
+    setShowDeletePrompt(false);
+    setShowFlatsList(false);
     setAdminForm({ name: '', phone: '', email: '', flat_id: '' });
 
     try {
@@ -313,10 +314,10 @@ export function SuperAdminScreen() {
   const handleInviteAdmin = async () => {
     if (!selectedSoc) return;
     if (!adminForm.phone || adminForm.phone.length < 10) {
-      return Alert.alert('Error', 'Please enter a valid 10-digit mobile number');
+      return Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter a valid 10-digit mobile number' });
     }
     if (!adminForm.name) {
-      return Alert.alert('Error', 'Please enter admin name');
+      return Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter admin name' });
     }
 
     setSubmittingAdmin(true);
@@ -327,13 +328,13 @@ export function SuperAdminScreen() {
         email: adminForm.email.trim() || undefined,
         flat_id: adminForm.flat_id ? parseInt(adminForm.flat_id) : undefined,
       });
-      Alert.alert('Success', `Admin ${adminForm.name} assigned! They can now log in via OTP.`);
+      Toast.show({ type: 'success', text1: 'Success', text2: `Admin ${adminForm.name} assigned! They can now log in via OTP.` });
       setAdminForm({ name: '', phone: '', email: '', flat_id: '' });
       setShowAddAdmin(false);
       const res = await SocietyService.getAdmins(selectedSoc.id);
       setSocietyAdmins(res.data?.data || []);
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to assign admin');
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to assign admin' });
     } finally {
       setSubmittingAdmin(false);
     }
@@ -352,7 +353,7 @@ export function SuperAdminScreen() {
             const res = await SocietyService.getAdmins(selectedSoc.id);
             setSocietyAdmins(res.data?.data || []);
           } catch (err: any) {
-            Alert.alert('Error', err.response?.data?.message || 'Failed to remove admin');
+            Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to remove admin' });
           }
         },
       },
@@ -388,8 +389,17 @@ export function SuperAdminScreen() {
         </View>
       </View>
 
+      <View style={{ marginBottom: 14 }}>
+        <Input 
+          placeholder="Search communities by name..."
+          value={searchQuery}
+          onChange={(v: string) => setSearchQuery(v)}
+          icon="🔍"
+        />
+      </View>
+
       <Text style={{ fontSize: 13, fontWeight: '700', color: T.dim, textTransform: 'uppercase', marginBottom: 10, letterSpacing: 0.5 }}>
-        Communities ({societies.length})
+        Communities ({societies.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).length})
       </Text>
 
       {societies.length === 0 && (
@@ -397,7 +407,7 @@ export function SuperAdminScreen() {
       )}
 
       {/* ── Clean Society Cards ───────────────────────────────────────────── */}
-      {societies.map((s) => (
+      {societies.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).map((s) => (
         <Card
           key={s.id}
           onClick={() => openSocietyOverview(s)}
@@ -411,8 +421,10 @@ export function SuperAdminScreen() {
               {s.city && (
                 <Badge color="blue" small>{s.city}</Badge>
               )}
-              {s.status === 'suspended' && (
+              {s.status === 'suspended' ? (
                 <Badge color="red" small>SUSPENDED</Badge>
+              ) : (
+                <Badge color="green" small>ACTIVE</Badge>
               )}
             </View>
             <Text style={{ color: T.muted, fontSize: 12, marginTop: 4 }} numberOfLines={1}>
@@ -434,7 +446,7 @@ export function SuperAdminScreen() {
             sm
             onClick={() => openSocietyOverview(s)}
           >
-            Overview ⚙
+            Manage ⚙
           </Btn>
         </Card>
       ))}
@@ -466,15 +478,15 @@ export function SuperAdminScreen() {
 
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
                 {/* Units */}
-                <View style={{ flex: 1, backgroundColor: T.surface2, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: T.border }}>
+                <TouchableOpacity onPress={() => setShowFlatsList(!showFlatsList)} style={{ flex: 1, backgroundColor: T.surface2, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: T.border }}>
                   <Text style={{ fontSize: 11, color: T.muted, fontWeight: '600' }}>FLATS / HOMES</Text>
-                  <Text style={{ fontSize: 18, fontWeight: '800', color: T.text, marginTop: 2 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: T.accent, marginTop: 2, textDecorationLine: 'underline' }}>
                     {socStats?.flats?.total || selectedSoc.total_flats || 0}
                   </Text>
                   <Text style={{ fontSize: 10, color: T.green, marginTop: 2 }}>
                     {socStats?.flats?.occupied || 0} Occ · {socStats?.flats?.vacant || 0} Vac
                   </Text>
-                </View>
+                </TouchableOpacity>
 
                 {/* Security */}
                 <View style={{ flex: 1, backgroundColor: T.surface2, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: T.border }}>
@@ -498,6 +510,31 @@ export function SuperAdminScreen() {
                   </Text>
                 </View>
               </View>
+
+              {/* Show flats inline when count is clicked */}
+              {showFlatsList && (
+                <View style={{ backgroundColor: T.surface, borderColor: T.border, borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 14 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: T.text, marginBottom: 8 }}>
+                    Provisioned Flats ({societyFlats.length})
+                  </Text>
+                  {societyFlats.length === 0 ? (
+                    <Text style={{ color: T.muted, fontSize: 12 }}>No flats have been added yet.</Text>
+                  ) : (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                      {societyFlats.slice(0, 100).map((f) => (
+                        <View key={f.id} style={{ backgroundColor: T.surface2, borderColor: T.border, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: T.text }}>{f.flat_number}</Text>
+                        </View>
+                      ))}
+                      {societyFlats.length > 100 && (
+                        <View style={{ backgroundColor: T.surface2, borderColor: T.border, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: T.muted }}>+ {societyFlats.length - 100} more</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+              )}
 
               {/* 2. RWA Society Admins Section */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -632,9 +669,20 @@ export function SuperAdminScreen() {
                     <Text style={{ color: '#B91C1C', fontSize: 11, marginBottom: 12 }}>
                       Immediately locks out all Guards, Residents, and Admins. Data is preserved safely.
                     </Text>
-                    <TouchableOpacity onPress={handleSuspend} style={{ backgroundColor: '#EF4444', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}>
-                      <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 13 }}>⏸ Suspend {selectedSoc.name}</Text>
-                    </TouchableOpacity>
+                    {!showSuspendPrompt ? (
+                      <TouchableOpacity onPress={() => setShowSuspendPrompt(true)} style={{ backgroundColor: '#EF4444', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}>
+                        <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 13 }}>⏸ Suspend {selectedSoc.name}</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                        <TouchableOpacity onPress={() => setShowSuspendPrompt(false)} style={{ flex: 1, backgroundColor: '#FECACA', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}>
+                          <Text style={{ color: '#991B1B', fontWeight: '700', fontSize: 13 }}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleSuspend} style={{ flex: 1, backgroundColor: '#991B1B', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}>
+                          <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 13 }}>Confirm Suspend</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                 ) : (
                   <View style={{ gap: 12 }}>
@@ -701,11 +749,30 @@ export function SuperAdminScreen() {
                 setForm({ ...form, name: v, slug: autoSlug });
               }}
             />
-            <Input
+            <Select
               label="City *"
-              placeholder="e.g. Noida"
+              placeholder="-- Select City --"
+              options={[
+                { label: 'Noida', value: 'Noida' },
+                { label: 'Greater Noida', value: 'Greater Noida' },
+                { label: 'Ghaziabad', value: 'Ghaziabad' },
+                { label: 'Lucknow', value: 'Lucknow' },
+                { label: 'Kanpur', value: 'Kanpur' },
+                { label: 'Agra', value: 'Agra' },
+                { label: 'Varanasi', value: 'Varanasi' },
+                { label: 'Prayagraj', value: 'Prayagraj' },
+                { label: 'Meerut', value: 'Meerut' },
+                { label: 'Other (UP)', value: 'Other' },
+              ]}
               value={form.city}
               onChange={(v: string) => setForm({ ...form, city: v })}
+            />
+            <Input
+              label="Pincode"
+              placeholder="e.g. 201301"
+              keyboardType="number-pad"
+              value={form.pincode}
+              onChange={(v: string) => setForm({ ...form, pincode: v.replace(/[^0-9]/g, '') })}
             />
             <Input
               label="Address"
@@ -742,6 +809,7 @@ export function SuperAdminScreen() {
             {[
               { label: 'Tower (T1-101)', val: 'T1-101, T1-102|' },
               { label: 'Block (A-101)', val: 'A-101, A-102|' },
+              { label: 'Sub-Flats (1A)', val: '1A|' },
               { label: 'Numeric (101)', val: '101, 102|' },
               { label: 'Floor (1/1)', val: '1/1, 1/2|' },
               { label: 'Plots (Plot 1)', val: 'Plot 1, Plot 2|' }
@@ -816,7 +884,7 @@ export function SuperAdminScreen() {
             </Text>
           </View>
 
-          <Btn full variant="green" onClick={handleBatchFlats} disabled={generatingFlats}>
+          <Btn full variant="green" onClick={handleBatchFlats} disabled={generatingFlats} loading={generatingFlats}>
             {generatingFlats ? `Generating...` : `Generate & Save ${generatedResult.list.length} Flats →`}
           </Btn>
         </Modal>

@@ -138,7 +138,7 @@ class SocietyService:
     def batch_create_flats(self, society_id: int, data: dict) -> list:
         society = self.get_by_id(society_id)
         prefix = data.get("prefix", "")
-        start_number = data.get("start_number", 101)
+        start_number = data.get("start_number", 1)
         count = data.get("count", 10)
         block_names = data.get("block_names")
         floors = data.get("floors")

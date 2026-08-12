@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, Image, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { useAuth } from '../../context/AuthContext';
 import { T, Card, Btn, Input, PageLayout, Badge, Modal, SearchableSelect } from '../../components/UI';
 import { AuthService, FlatService, SocietyService } from '../../services';
@@ -245,14 +246,22 @@ export function LoginScreen({ navigation }: any) {
 
       {/* ── STEP 1: ENTER PHONE NUMBER (OTP ONLY) ─────────────────────────── */}
       {step === 'phone' && (
-        <Card style={{ padding: 20 }}>
-          <Text style={{ fontSize: 13, fontWeight: '600', color: T.muted, marginBottom: 14 }}>
-            Enter your mobile number to receive a one-time verification code:
-          </Text>
+        <Card style={{ padding: 24, borderWidth: 1, borderColor: T.border, shadowOpacity: 0 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 }}>
+            <View style={{ backgroundColor: T.surface2, padding: 10, borderRadius: 12 }}>
+              <Text style={{ fontSize: 20 }}>🛡️</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 17, fontWeight: '800', color: T.text }}>Secure Sign In</Text>
+              <Text style={{ fontSize: 13, color: T.muted, marginTop: 2 }}>
+                We will send an OTP to verify your identity.
+              </Text>
+            </View>
+          </View>
 
           <Input
             label="Mobile Number"
-            placeholder="e.g. 9876543210"
+            placeholder="9876543210"
             maxLength={10}
             keyboardType="number-pad"
             value={phone}
@@ -261,29 +270,34 @@ export function LoginScreen({ navigation }: any) {
               setPhone(numericValue);
               setErrorMsg(null);
             }}
-            icon="📞"
+            icon="🇮🇳 +91"
           />
 
           <Btn
             full
             disabled={loading}
             onClick={handleSendOtp}
-            style={{ marginTop: 8, paddingVertical: 14, borderRadius: 12 }}
+            style={{ marginTop: 12, paddingVertical: 15, borderRadius: 12 }}
           >
-            {loading ? 'Sending Code...' : 'Get Verification Code →'}
+            {loading ? 'Sending OTP...' : 'Get OTP'}
           </Btn>
         </Card>
       )}
 
       {/* ── STEP 2: ENTER OTP CODE ────────────────────────────────────────── */}
       {step === 'otp' && (
-        <Card style={{ padding: 20 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <View>
-              <Text style={{ fontSize: 12, color: T.muted, fontWeight: '500' }}>Mobile Number</Text>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: T.text, marginTop: 2 }}>
-                +91 {phone}
-              </Text>
+        <Card style={{ padding: 24, borderWidth: 1, borderColor: T.border, shadowOpacity: 0 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ backgroundColor: T.surface2, padding: 10, borderRadius: 12 }}>
+                <Text style={{ fontSize: 20 }}>📲</Text>
+              </View>
+              <View>
+                <Text style={{ fontSize: 13, color: T.muted, fontWeight: '500' }}>Mobile Number</Text>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: T.text, marginTop: 2 }}>
+                  +91 {phone}
+                </Text>
+              </View>
             </View>
             <TouchableOpacity
               onPress={() => {
@@ -293,18 +307,16 @@ export function LoginScreen({ navigation }: any) {
               style={{
                 backgroundColor: T.surface2,
                 paddingHorizontal: 12,
-                paddingVertical: 6,
+                paddingVertical: 8,
                 borderRadius: 8,
-                borderWidth: 1,
-                borderColor: T.border,
               }}
             >
-              <Text style={{ fontSize: 12, color: T.accent, fontWeight: '700' }}>✏️ Change</Text>
+              <Text style={{ fontSize: 12, color: T.accent, fontWeight: '700' }}>Change</Text>
             </TouchableOpacity>
           </View>
 
           <Input
-            label="6-Digit Verification Code"
+            label="6-Digit OTP"
             placeholder="• • • • • •"
             value={otp}
             onChange={(v: string) => {
@@ -339,13 +351,13 @@ export function LoginScreen({ navigation }: any) {
             full
             disabled={loading}
             onClick={handleVerifyOtp}
-            style={{ paddingVertical: 14, borderRadius: 12 }}
+            style={{ paddingVertical: 15, borderRadius: 12 }}
           >
-            {loading ? 'Verifying...' : 'Verify & Sign In →'}
+            {loading ? 'Verifying...' : 'Verify OTP'}
           </Btn>
 
           {/* Resend OTP Action */}
-          <View style={{ alignItems: 'center', marginTop: 16 }}>
+          <View style={{ alignItems: 'center', marginTop: 20 }}>
             {timer > 0 ? (
               <Text style={{ color: T.muted, fontSize: 13, fontWeight: '500' }}>
                 Resend code in <Text style={{ color: T.text, fontWeight: '700' }}>0:{timer < 10 ? `0${timer}` : timer}</Text>

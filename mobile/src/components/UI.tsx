@@ -49,12 +49,16 @@ export const Avatar = ({ name='?', size=38, color=T.accent }: any) => {
   );
 };
 
-export const Btn = ({ children, onClick, variant='primary', sm, full, disabled, style }: any) => {
+export const Btn = ({ children, onClick, variant='primary', sm, full, disabled, loading, style }: any) => {
   const S: any = { primary:{bg:T.accent,fg:T.bg}, green:{bg:T.green,fg:T.bg}, red:{bg:T.red,fg:'#fff'}, ghost:{bg:'transparent',fg:T.muted,border:T.border}, outline:{bg:'transparent',fg:T.accent,border:T.accent+'55'}, amber:{bg:T.amber,fg:T.bg} };
   const s = S[variant] || S.primary;
   return (
-    <TouchableOpacity disabled={disabled} onPress={onClick} style={[{ backgroundColor: variant==='ghost'||variant==='outline'?'transparent':s.bg, borderColor: s.border || 'transparent', borderWidth: s.border ? 1 : 0, borderRadius: 10, paddingVertical: sm ? 8 : 12, paddingHorizontal: sm ? 14 : 22, opacity: disabled ? 0.5 : 1, width: full ? '100%' : 'auto', alignItems: 'center', justifyContent: 'center' }, style]}>
-      <Text style={{ color: s.fg, fontWeight: '600', fontSize: sm ? 13 : 15 }}>{children}</Text>
+    <TouchableOpacity disabled={disabled || loading} onPress={onClick} style={[{ backgroundColor: variant==='ghost'||variant==='outline'?'transparent':s.bg, borderColor: s.border || 'transparent', borderWidth: s.border ? 1 : 0, borderRadius: 10, paddingVertical: sm ? 8 : 12, paddingHorizontal: sm ? 14 : 22, opacity: disabled || loading ? 0.7 : 1, width: full ? '100%' : 'auto', alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }, style]}>
+      {loading ? (
+        <ActivityIndicator color={s.fg} size="small" />
+      ) : (
+        <Text style={{ color: s.fg, fontWeight: '600', fontSize: sm ? 13 : 15 }}>{children}</Text>
+      )}
     </TouchableOpacity>
   );
 };
@@ -244,6 +248,7 @@ export const SearchableSelect = ({ label, value, onChange, options, placeholder,
               value={search}
               onChangeText={setSearch}
               autoCapitalize="none"
+              autoFocus
             />
             <ScrollView keyboardShouldPersistTaps="handled">
               {filtered.map((o: any) => (

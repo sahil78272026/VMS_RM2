@@ -9,9 +9,18 @@ export const formatTimestamp = (dateStr: string | Date | null | undefined): stri
   if (!dateStr) return 'N/A';
   
   try {
-    const date = typeof dateStr === 'string' ? parseISO(dateStr) : dateStr;
+    let date: Date;
+    if (typeof dateStr === 'string') {
+      let safeStr = dateStr;
+      if (!safeStr.endsWith('Z') && !safeStr.match(/([+-]\d{2}:\d{2})$/)) {
+        safeStr += 'Z';
+      }
+      date = parseISO(safeStr);
+    } else {
+      date = dateStr;
+    }
+
     if (!isValid(date)) {
-      // fallback if not ISO string
       const fallbackDate = new Date(dateStr);
       if (!isValid(fallbackDate)) return 'Invalid Date';
       return format(fallbackDate, 'dd MMM yyyy, hh:mm a');
@@ -31,7 +40,17 @@ export const formatDate = (dateStr: string | Date | null | undefined): string =>
   if (!dateStr) return 'N/A';
   
   try {
-    const date = typeof dateStr === 'string' ? parseISO(dateStr) : dateStr;
+    let date: Date;
+    if (typeof dateStr === 'string') {
+      let safeStr = dateStr;
+      if (!safeStr.endsWith('Z') && !safeStr.match(/([+-]\d{2}:\d{2})$/)) {
+        safeStr += 'Z';
+      }
+      date = parseISO(safeStr);
+    } else {
+      date = dateStr;
+    }
+
     if (!isValid(date)) {
       const fallbackDate = new Date(dateStr);
       if (!isValid(fallbackDate)) return 'Invalid Date';

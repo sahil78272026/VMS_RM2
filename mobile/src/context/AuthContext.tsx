@@ -37,27 +37,7 @@ export const AuthProvider = ({ children }: any) => {
   }, []);
 
   const login = useCallback(async (phone: string, password: string, requested_society_id?: number) => {
-    let expo_push_token = null;
-    try {
-      if (Device.isDevice) {
-        const Notifications = await import('expo-notifications');
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
-        let finalStatus = existingStatus;
-        if (existingStatus !== 'granted') {
-          const { status } = await Notifications.requestPermissionsAsync();
-          finalStatus = status;
-        }
-        if (finalStatus === 'granted') {
-          const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-          const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-          expo_push_token = tokenData.data;
-        }
-      }
-    } catch (e) {
-      console.log('Push token fetch failed:', e);
-    }
-
-    const res  = await AuthService.login({ phone, password, expo_push_token, society_id: requested_society_id });
+    const res  = await AuthService.login({ phone, password, expo_push_token: null, society_id: requested_society_id });
     const data = res.data.data;
 
     await AsyncStorage.setItem('access_token',      data.access_token);
@@ -87,29 +67,9 @@ export const AuthProvider = ({ children }: any) => {
   }, []);
 
   const loginWithGoogle = useCallback(async (googleData: { email: string; name?: string; google_id?: string; photo_url?: string; society_id?: number }) => {
-    let expo_push_token = null;
-    try {
-      if (Device.isDevice) {
-        const Notifications = await import('expo-notifications');
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
-        let finalStatus = existingStatus;
-        if (existingStatus !== 'granted') {
-          const { status } = await Notifications.requestPermissionsAsync();
-          finalStatus = status;
-        }
-        if (finalStatus === 'granted') {
-          const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-          const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-          expo_push_token = tokenData.data;
-        }
-      }
-    } catch (e) {
-      console.log('Push token fetch failed:', e);
-    }
-
     const res = await AuthService.googleLogin({
       ...googleData,
-      expo_push_token,
+      expo_push_token: null,
     });
     const data = res.data.data;
 
@@ -171,27 +131,7 @@ export const AuthProvider = ({ children }: any) => {
   }, []);
 
   const verifyOtp = useCallback(async (phone: string, otp: string, requested_society_id?: number) => {
-    let expo_push_token = null;
-    try {
-      if (Device.isDevice) {
-        const Notifications = await import('expo-notifications');
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
-        let finalStatus = existingStatus;
-        if (existingStatus !== 'granted') {
-          const { status } = await Notifications.requestPermissionsAsync();
-          finalStatus = status;
-        }
-        if (finalStatus === 'granted') {
-          const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-          const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-          expo_push_token = tokenData.data;
-        }
-      }
-    } catch (e) {
-      console.log('Push token fetch failed:', e);
-    }
-
-    const res = await AuthService.verifyOtp({ phone, otp, expo_push_token, society_id: requested_society_id });
+    const res = await AuthService.verifyOtp({ phone, otp, expo_push_token: null, society_id: requested_society_id });
     const data = res.data.data;
 
     if (data.is_new_user) {

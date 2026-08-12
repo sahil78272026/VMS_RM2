@@ -169,6 +169,7 @@ class User(Base):
     move_in_date   = Column(Date, nullable=True)
     created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_login     = Column(DateTime, nullable=True)
+    notifications_muted = Column(Boolean, default=False, nullable=False)
 
     # Relationships
     society_admins       = relationship("SocietyAdmin",       back_populates="user",    lazy="dynamic")
@@ -190,6 +191,7 @@ class User(Base):
                 "society_id": self.flat_user.society_id,
                 "society_name": self.flat_user.society.name,
                 "society_slug": self.flat_user.society.slug,
+                "society_status": self.flat_user.society.status,
                 "role": "resident",
                 "flat_id": self.flat_user.flat_id,
                 "flat_number": self.flat_user.flat.flat_number if self.flat_user.flat else None,
@@ -200,6 +202,7 @@ class User(Base):
                 "society_id": self.guard.society_id,
                 "society_name": self.guard.society.name,
                 "society_slug": self.guard.society.slug,
+                "society_status": self.guard.society.status,
                 "role": "guard",
                 "employee_id": self.guard.employee_id,
             })
@@ -210,6 +213,7 @@ class User(Base):
                     "society_id": sa.society_id,
                     "society_name": sa.society.name,
                     "society_slug": sa.society.slug,
+                    "society_status": sa.society.status,
                     "role": "admin",
                 })
 
@@ -226,6 +230,7 @@ class User(Base):
             "move_in_date":   self.move_in_date.isoformat() if self.move_in_date else None,
             "created_at":     self.created_at.isoformat(),
             "last_login":     self.last_login.isoformat() if self.last_login else None,
+            "notifications_muted": self.notifications_muted,
             "societies":      societies_info,
         }
         return data
@@ -440,6 +445,7 @@ class VisitorLog(Base):
             "created_at":            self.created_at.isoformat(),
             "visitor":               self.visitor.to_dict() if self.visitor else None,
             "flat":                  self.flat.to_dict() if self.flat else None,
+            "entry_gate":            self.entry_gate.to_dict() if self.entry_gate else None,
         }
 
 

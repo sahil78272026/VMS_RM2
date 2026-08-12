@@ -163,7 +163,7 @@ async def approve_family_member(user_id: int, request: Request, db: Session = De
             raise AppException("User not found or invalid flat", "NOT_FOUND", 404)
             
         data = await request.json()
-        relation = data.get("relation", "family")
+        relation = data.get("relation", "sibling")
         
         target.status = "active"
         target.move_in_date = target.move_in_date or __import__('datetime').date.today()
