@@ -7,6 +7,7 @@ Includes multi-tenancy scoping by society_id across all tenant models.
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 from app.repositories.base import BaseRepository
 from app.models import (
     Society, SocietyAdmin, User, Flat, FlatUser, Guard, Visitor, VisitorLog,
@@ -366,7 +367,11 @@ class VisitorLogRepository(BaseRepository):
         return q.all()
 
     def get_by_flat(self, flat_id: int, page: int = 1, per_page: int = 20):
-        q = self.db.query(VisitorLog).filter_by(flat_id=flat_id).order_by(
+        # Eager load visitor and flat to avoid N+1 query bottlenecks during to_dict serialization
+        q = self.db.query(VisitorLog).options(
+            joinedload(VisitorLog.visitor),
+            joinedload(VisitorLog.flat)
+        ).filter_by(flat_id=flat_id).order_by(
             VisitorLog.created_at.desc()
         )
         return self.paginate(page=page, per_page=per_page, query=q)
@@ -379,7 +384,11 @@ class VisitorLogRepository(BaseRepository):
         ).order_by(VisitorLog.created_at.desc()).all()
 
     def get_all_filtered(self, filters: dict, page: int = 1, per_page: int = 20, society_id: int = None):
-        q = self.db.query(VisitorLog)
+        # Eager load visitor and flat to avoid N+1 query bottlenecks during to_dict serialization
+        q = self.db.query(VisitorLog).options(
+            joinedload(VisitorLog.visitor),
+            joinedload(VisitorLog.flat)
+        )
         target_society_id = society_id or filters.get("society_id")
         if target_society_id:
             q = q.filter_by(society_id=target_society_id)
