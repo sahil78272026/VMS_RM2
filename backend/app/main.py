@@ -9,20 +9,20 @@ load_dotenv()
 from app.utils.exceptions import AppException
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="RM2 VMS", version="1.0.0")
+    app = FastAPI(title="RM2 Secure", version="1.0.0")
 
     if os.getenv("APP_ENV") == "DEV":
         import logging
         import re
         logger = logging.getLogger("uvicorn")
-        masked_url = db_url = os.getenv("DATABASE_URL", "sqlite:///rm2_vms.db")
+        db_url = os.getenv("DATABASE_URL")
         storage = os.getenv("SUPABASE_S3_BUCKET")
         
         # Mask password in URL for safe logging
-        # masked_url = re.sub(r":([^@]+)@", ":***@", db_url)
+        masked_url = re.sub(r":([^@]+)@", ":***@", db_url)
         
         print("\n" + "="*50)
-        print("🚀  STARTING RM2 VMS IN [DEV] MODE  🚀")
+        print("🚀  STARTING RM2 Secure IN [DEV] MODE  🚀")
         print("="*50)
         print(f"📦 Database : {masked_url}")
         print(f"Storage", storage)
@@ -92,6 +92,12 @@ def create_app() -> FastAPI:
     from app.api.users import router as users_router
     from app.api.sse import router as sse_router
     from app.api.amenities import router as amenities_router
+    from app.api.helpdesk import router as helpdesk_router
+    from app.api.security import router as security_router
+    from app.api.security_agencies import router as security_agencies_router
+    from app.api.parking_violations import router as parking_violations_router
+
+    from app.api.ocr import router as ocr_router
 
     app.include_router(auth_router)
     app.include_router(societies_router)
@@ -113,6 +119,11 @@ def create_app() -> FastAPI:
     app.include_router(users_router)
     app.include_router(sse_router)
     app.include_router(amenities_router)
+    app.include_router(helpdesk_router)
+    app.include_router(security_router)
+    app.include_router(security_agencies_router)
+    app.include_router(parking_violations_router)
+    app.include_router(ocr_router)
 
 
 

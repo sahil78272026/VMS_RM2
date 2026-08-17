@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, Alert, ScrollView, BackHandler, PanResponder, Dimensions, ActivityIndicator, TouchableOpacity, Animated, RefreshControl } from 'react-native';
+import { View, Text, Alert, ScrollView, BackHandler, PanResponder, Dimensions, ActivityIndicator, TouchableOpacity, Animated, RefreshControl, Linking } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { T, Card, Btn, StatCard, EmptyState, LoadingScreen, Tabs, Avatar, Badge, Input, Select, Modal, SocietySwitcher } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
-import { UserService, FlatUserService, GuardService, FlatService, MaintenanceService, AmenityService } from '../../services';
+import { UserService, FlatUserService, GuardService, FlatService, MaintenanceService, AmenityService, HelpdeskService, AnnouncementService, SocietyService } from '../../services';
+import api from '../../services/api';
+import { formatDate, formatTimestamp } from '../../utils/date';
 export { SuperAdminScreen } from './SuperAdminScreen';
 
 const { width } = Dimensions.get('window');
@@ -94,6 +97,9 @@ export function AdminDashboard({ navigation }: any) {
   const [pendingPayments, setPendingPayments] = useState<any[]>([]);
   const [maintenanceFlats, setMaintenanceFlats] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
+  const [helpdeskTickets, setHelpdeskTickets] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [donations, setDonations] = useState<any[]>([]);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [flatPage, setFlatPage] = useState(1);
@@ -104,6 +110,8 @@ export function AdminDashboard({ navigation }: any) {
   
   const [modal, setModal] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
+  const [saving, setSaving] = useState(false);
+  const [expandedFlatId, setExpandedFlatId] = useState<number | null>(null);
 
   const isLoadingRef = useRef(false);
 
@@ -131,20 +139,30 @@ export function AdminDashboard({ navigation }: any) {
 
   const load = useCallback(async () => {
     try {
-      const [fr, gr, pr, ar, p_pay, srv] = await Promise.all([
+      const [fr, gr, usersRes, p_pay, srv, hr, ann, donRes] = await Promise.all([
         FlatService.getAll({ per_page: 5000, society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
         GuardService.getAll({ society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
-        UserService.getAll({ role: 'resident', status: 'pending_verification', society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
-        UserService.getAll({ role: 'resident', status: 'active', society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
+        UserService.getAll({ role: 'resident', society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
         MaintenanceService.getPending({ society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
         AmenityService.getAll({ society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
+        HelpdeskService.getAll({ society_id: activeSocietyId }).catch(() => ({ data: { data: { items: [] } } })),
+        AnnouncementService.getAll({ society_id: activeSocietyId }).catch(() => ({ data: { data: { items: [] } } })),
+        SocietyService.getDonations(activeSocietyId).catch(() => ({ data: { data: [] } })),
       ]);
-      setFlats(fr.data?.data?.items || fr.data?.data || []);
+      const frFlats = fr.data?.data?.items || fr.data?.data || [];
+      frFlats.sort((a: any, b: any) => a.flat_number.replace(/\d+/g, (n: any) => n.padStart(5, '0')).localeCompare(b.flat_number.replace(/\d+/g, (n: any) => n.padStart(5, '0'))));
+      setFlats(frFlats);
       setGuards(gr.data?.data?.items || gr.data?.data || []);
-      setPendingResidents(pr.data?.data?.items || pr.data?.data || []);
-      setActiveResidents(ar.data?.data?.items || ar.data?.data || []);
+      
+      const allUsers = usersRes.data?.data?.items || usersRes.data?.data || [];
+      setPendingResidents(allUsers.filter((u: any) => u.status === 'pending_verification'));
+      setActiveResidents(allUsers.filter((u: any) => u.status === 'active'));
+      
       setPendingPayments(p_pay.data?.data || []);
       setServices(srv.data?.data || []);
+      setHelpdeskTickets(hr.data?.data?.items || hr.data?.data || []);
+      setAnnouncements(ann.data?.data?.items || ann.data?.data || []);
+      setDonations(donRes.data?.data || []);
     } catch {}
     setLoading(false);
   }, [activeSocietyId]);
@@ -178,65 +196,166 @@ export function AdminDashboard({ navigation }: any) {
         is_owner: true,
         move_in_date: userToApprove.move_in_date || new Date().toISOString().split('T')[0],
       });
-      Alert.alert('Resident Verified', `${userToApprove.name} has been approved.`);
+      Toast.show({ type: 'success', text1: 'Resident Verified', text2: `${userToApprove.name} has been approved.` });
       load();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to approve resident');
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to approve resident' });
     }
   };
 
   const createGuard = async () => {
     if (!form.name || !form.phone || !form.employee_id) {
-      return Alert.alert('Error', 'Please fill all required guard details');
+      return Toast.show({ type: 'error', text1: 'Error', text2: 'Please fill all required guard details' });
     }
+    if (form.phone.length !== 10) {
+      return Toast.show({ type: 'error', text1: 'Invalid Phone', text2: 'Please enter a valid 10-digit mobile number.' });
+    }
+    setSaving(true);
     try {
       await GuardService.create({ ...form });
-      Alert.alert('Success', 'Guard account created successfully.');
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Guard account created successfully.' });
       setModal(null);
       setForm({});
       load();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to create guard');
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to create guard' });
+    } finally {
+      setSaving(false);
     }
   };
 
   const approvePayment = async (id: string) => {
     try {
       await MaintenanceService.approve(id);
-      Alert.alert('Payment Verified', 'Maintenance payment approved.');
+      Toast.show({ type: 'success', text1: 'Payment Verified', text2: 'Maintenance payment approved.' });
       load();
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to approve payment');
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to approve payment' });
     }
   };
 
   const rejectPayment = async (id: string) => {
     try {
       await MaintenanceService.reject(id);
-      Alert.alert('Payment Rejected', 'Payment entry has been marked rejected.');
+      Toast.show({ type: 'error', text1: 'Payment Rejected', text2: 'Payment entry has been marked rejected.' });
       load();
     } catch (err: any) {
-      Alert.alert('Error', 'Failed to reject payment');
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to reject payment' });
     }
   };
 
-    const createService = async () => {
-    if (!form.name) return Alert.alert('Error', 'Please enter a name for the amenity/service');
+  const verifyDonation = async (id: string) => {
     try {
-      await AmenityService.create({
+      await SocietyService.verifyDonation(activeSocietyId, id);
+      Toast.show({ type: 'success', text1: 'Verified', text2: 'Donation has been verified.' });
+      load();
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to verify donation' });
+    }
+  };
+
+  const processOfflinePayment = async () => {
+    if (!form.amount || !form.months_added) return Toast.show({ type: 'error', text1: 'Error', text2: 'Please fill all fields' });
+    setSaving(true);
+    try {
+      await MaintenanceService.offline({
+        flat_id: form.flat_id,
+        amount: form.amount,
+        months_added: form.months_added,
+        utr_number: form.utr_number || 'OFFLINE',
+      });
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Offline payment recorded successfully' });
+      setModal(null);
+      setForm({});
+      loadMaintenanceFlats(1, searchQuery, true);
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to process payment' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveService = async () => {
+    if (!form.name) return Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter a name for the amenity/service' });
+    setSaving(true);
+    try {
+      const data = {
         name: form.name,
         category: form.category || 'facility',
         description: form.description || null,
         contact_info: form.contact_info || null,
         timing: form.timing || null,
         status: form.status || 'active'
-      }, activeSocietyId);
-      Alert.alert('Success', 'Service created successfully.');
+      };
+      
+      if (form.id) {
+        await AmenityService.update(form.id, data);
+        Toast.show({ type: 'success', text1: 'Success', text2: 'Service updated successfully.' });
+      } else {
+        await AmenityService.create(data, activeSocietyId);
+        Toast.show({ type: 'success', text1: 'Success', text2: 'Service created successfully.' });
+      }
+      
       setModal(null);
       setForm({});
       load();
     } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to create service');
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to save service' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deactivateGuard = async (id: string) => {
+    try {
+      await GuardService.deactivate(id);
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Guard deactivated.' });
+      load();
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed' });
+    }
+  };
+
+  const updateTicket = async () => {
+    try {
+      await HelpdeskService.update(form.id, {
+        status: form.status,
+        priority: form.priority,
+        comments: form.comments,
+      });
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Ticket updated' });
+      setModal(null);
+      setForm({});
+      load();
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: e.response?.data?.message || 'Failed to update ticket' });
+    }
+  };
+
+  const createAnnouncement = async () => {
+    try {
+      await AnnouncementService.create({
+        title: form.title,
+        body: form.body,
+        priority: form.priority || 'normal',
+        society_id: activeSocietyId,
+      });
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Announcement created' });
+      setModal(null);
+      setForm({});
+      load();
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: e.response?.data?.message || 'Failed to create' });
+    }
+  };
+
+  const deleteService = async (id: string) => {
+    try {
+      await AmenityService.delete(id);
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Amenity deleted.' });
+      load();
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed' });
     }
   };
 
@@ -266,12 +385,12 @@ export function AdminDashboard({ navigation }: any) {
                 </Text>
               </View>
               <Text style={{ color: '#92400E', fontSize: 13, marginBottom: 12 }}>
-                {pendingResidents.length} resident verifications · {pendingPayments.length} payment receipts to verify.
+                {pendingResidents.length} resident verifications · {pendingPayments.length} payment receipts · {donations.filter(d => d.status === 'pending').length} donations to verify.
               </Text>
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 {pendingResidents.length > 0 && (
                   <TouchableOpacity
-                    onPress={() => setCurrentTab('residents')}
+                    onPress={() => setCurrentTab('directory')}
                     style={{
                       flex: 1,
                       backgroundColor: '#FFFFFF',
@@ -289,7 +408,7 @@ export function AdminDashboard({ navigation }: any) {
                 )}
                 {pendingPayments.length > 0 && (
                   <TouchableOpacity
-                    onPress={() => setCurrentTab('maintenance')}
+                    onPress={() => setCurrentTab('directory')}
                     style={{
                       flex: 1,
                       backgroundColor: Warm.green,
@@ -377,7 +496,7 @@ export function AdminDashboard({ navigation }: any) {
               Society Management
             </Text>
             <TouchableOpacity
-              onPress={() => setCurrentTab('residents')}
+              onPress={() => setCurrentTab('directory')}
               style={{
                 backgroundColor: Warm.cardSubtle,
                 borderColor: Warm.cardBorder,
@@ -398,7 +517,7 @@ export function AdminDashboard({ navigation }: any) {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => setCurrentTab('maintenance')}
+              onPress={() => setCurrentTab('directory')}
               style={{
                 backgroundColor: Warm.cardSubtle,
                 borderColor: Warm.cardBorder,
@@ -438,13 +557,52 @@ export function AdminDashboard({ navigation }: any) {
               <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 14 }}>→</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Announcements Section */}
+          <View style={{ marginTop: 24 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: Warm.text }}>Announcements</Text>
+              <TouchableOpacity
+                onPress={() => setModal('create_announcement')}
+                style={{ backgroundColor: Warm.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}
+              >
+                <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 12 }}>+ New</Text>
+              </TouchableOpacity>
+            </View>
+
+            {announcements.length === 0 && (
+              <EmptyState icon="📢" title="No Announcements" message="Create announcements to notify residents." />
+            )}
+
+            {announcements.map((ann: any) => (
+              <View key={ann.id} style={{
+                backgroundColor: ann.priority === 'urgent' ? Warm.redDim : Warm.cardBg,
+                borderColor: ann.priority === 'urgent' ? '#FCA5A5' : Warm.cardBorder,
+                borderWidth: 1,
+                borderRadius: 12,
+                padding: 14,
+                marginBottom: 10,
+              }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: Warm.text }}>{ann.title}</Text>
+                  {ann.priority === 'urgent' && <Badge label="URGENT" variant="danger" />}
+                </View>
+                <Text style={{ fontSize: 12, color: Warm.textMuted }}>{ann.body}</Text>
+                <Text style={{ fontSize: 10, color: Warm.textDim, marginTop: 6, textTransform: 'uppercase', fontWeight: '700' }}>
+                  {formatTimestamp(ann.created_at)}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
       );
     }
 
-    if (currentTab === 'residents') {
+    
+    if (currentTab === 'directory') {
       return (
         <View>
+
           {pendingResidents.length > 0 && (
             <View style={{ marginBottom: 22 }}>
               <Text style={{ fontSize: 13, fontWeight: '800', color: '#B45309', marginBottom: 10, letterSpacing: 0.5 }}>
@@ -488,48 +646,6 @@ export function AdminDashboard({ navigation }: any) {
               ))}
             </View>
           )}
-
-          <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginBottom: 12 }}>
-            Active Verified Residents ({activeResidents.length})
-          </Text>
-          {activeResidents.length === 0 && (
-            <View style={{ backgroundColor: Warm.cardBg, borderRadius: 18, padding: 30, alignItems: 'center', ...Warm.shadow }}>
-              <Text style={{ fontSize: 32 }}>🏠</Text>
-              <Text style={{ color: Warm.text, fontWeight: '700', marginTop: 8 }}>No Active Residents</Text>
-            </View>
-          )}
-          {activeResidents.map((r: any) => (
-            <View
-              key={r.id}
-              style={{
-                backgroundColor: Warm.cardBg,
-                borderColor: Warm.cardBorder,
-                borderWidth: 1,
-                borderRadius: 16,
-                padding: 14,
-                marginBottom: 10,
-                flexDirection: 'row',
-                alignItems: 'center',
-                ...Warm.shadow,
-              }}
-            >
-              <Avatar name={r.name} size={42} color={Warm.accent} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>{r.name}</Text>
-                <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>📞 {r.phone}</Text>
-              </View>
-              <View style={{ backgroundColor: Warm.greenDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
-                <Text style={{ color: Warm.green, fontSize: 11, fontWeight: '700' }}>Active</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      );
-    }
-
-    if (currentTab === 'maintenance') {
-      return (
-        <View>
           {pendingPayments.length > 0 && (
             <View style={{ marginBottom: 24 }}>
               <Text style={{ fontSize: 13, fontWeight: '800', color: '#B45309', marginBottom: 10, letterSpacing: 0.5 }}>
@@ -555,6 +671,11 @@ export function AdminDashboard({ navigation }: any) {
                   <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>
                     UTR / Reference: {p.utr_number}
                   </Text>
+                  {p.proof_url && (
+                    <Text style={{ color: Warm.accent, fontSize: 12, marginTop: 4, fontWeight: '600' }} onPress={() => Linking.openURL(p.proof_url.startsWith('http') ? p.proof_url : (api.defaults.baseURL.replace('/api/v1', '') + p.proof_url))}>
+                      🔗 View Payment Screenshot
+                    </Text>
+                  )}
 
                   <View style={{ flexDirection: 'row', marginTop: 14, gap: 10 }}>
                     <TouchableOpacity
@@ -590,6 +711,59 @@ export function AdminDashboard({ navigation }: any) {
             </View>
           )}
 
+          {donations.filter((d: any) => d.status === 'pending').length > 0 && (
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#047857', marginBottom: 10, letterSpacing: 0.5 }}>
+                🎁 DONATIONS TO VERIFY ({donations.filter((d: any) => d.status === 'pending').length})
+              </Text>
+              {donations.filter((d: any) => d.status === 'pending').map((p: any) => (
+                <View
+                  key={p.id}
+                  style={{
+                    backgroundColor: Warm.cardBg,
+                    borderColor: Warm.green,
+                    borderWidth: 1.5,
+                    borderRadius: 18,
+                    padding: 18,
+                    marginBottom: 12,
+                    ...Warm.shadow,
+                  }}
+                >
+                  <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 18 }}>From: {p.user_name}</Text>
+                  <Text style={{ color: Warm.green, fontSize: 14, fontWeight: '700', marginTop: 2 }}>
+                    Amount: ₹{p.amount} ({p.purpose})
+                  </Text>
+                  <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>
+                    UTR / Reference: {p.utr_number}
+                  </Text>
+                  <Text style={{ color: Warm.textDim, fontSize: 11, marginTop: 4 }}>
+                    {formatTimestamp(p.created_at)}
+                  </Text>
+                  {p.receipt_url && (
+                    <Text style={{ color: Warm.accent, fontSize: 12, marginTop: 4, fontWeight: '600' }} onPress={() => Linking.openURL(p.receipt_url.startsWith('http') ? p.receipt_url : (api.defaults.baseURL.replace('/api/v1', '') + p.receipt_url))}>
+                      🔗 View Donation Screenshot
+                    </Text>
+                  )}
+
+                  <View style={{ flexDirection: 'row', marginTop: 14, gap: 10 }}>
+                    <TouchableOpacity
+                      onPress={() => verifyDonation(p.id)}
+                      style={{
+                        flex: 1,
+                        backgroundColor: Warm.green,
+                        borderRadius: 12,
+                        paddingVertical: 10,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>✓ Verify UTR</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
           <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginBottom: 10 }}>
             Master Flat Directory
           </Text>
@@ -612,10 +786,15 @@ export function AdminDashboard({ navigation }: any) {
 
           {maintenanceFlats.map((f: any) => {
             const validUntil = f.maintenance_valid_until ? new Date(f.maintenance_valid_until) : null;
-            const isExpired = !validUntil || validUntil < new Date();
+            const now = new Date();
+            const isExpired = !validUntil || validUntil < now;
+            const daysUntilExpiry = validUntil ? Math.ceil((validUntil.getTime() - now.getTime()) / (1000 * 3600 * 24)) : 0;
+            const isRenewable = isExpired || daysUntilExpiry <= 15;
 
             return (
-              <View
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setExpandedFlatId(expandedFlatId === f.id ? null : f.id)}
                 key={f.id}
                 style={{
                   backgroundColor: Warm.cardBg,
@@ -624,23 +803,55 @@ export function AdminDashboard({ navigation }: any) {
                   borderRadius: 16,
                   padding: 14,
                   marginBottom: 10,
-                  flexDirection: 'row',
-                  alignItems: 'center',
+                  flexDirection: 'column',
                   ...Warm.shadow,
                 }}
               >
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 16 }}>Flat {f.flat_number}</Text>
-                  <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>
-                    {validUntil ? `Valid through ${validUntil.toLocaleDateString()}` : 'No active cycle recorded'}
-                  </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 16 }}>Flat {f.flat_number}</Text>
+                    <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>
+                      {validUntil ? `Valid through ${formatDate(validUntil)}` : 'No active cycle recorded'}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 6, flexDirection: 'row' }}>
+                    {f.residents?.length > 0 && (
+                      <View style={{ backgroundColor: Warm.greenDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                        <Text style={{ color: Warm.green, fontSize: 11, fontWeight: '700' }}>OCCUPIED</Text>
+                      </View>
+                    )}
+                    <View style={{ backgroundColor: isExpired ? Warm.redDim : Warm.greenDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                      <Text style={{ color: isExpired ? Warm.red : Warm.green, fontSize: 11, fontWeight: '700' }}>
+                        {isExpired ? 'UNPAID' : 'PAID'}
+                      </Text>
+                    </View>
+                    {isRenewable && (
+                      <TouchableOpacity
+                        onPress={() => { setForm({ flat_id: f.id, flat_number: f.flat_number, amount: 1200, months_added: 6 }); setModal('offline_payment'); }}
+                        style={{ backgroundColor: Warm.accent, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}
+                      >
+                        <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '800' }}>OFFLINE PAY</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
-                <View style={{ backgroundColor: isExpired ? Warm.redDim : Warm.greenDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
-                  <Text style={{ color: isExpired ? Warm.red : Warm.green, fontSize: 11, fontWeight: '700' }}>
-                    {isExpired ? 'EXPIRED' : 'ACTIVE'}
-                  </Text>
-                </View>
-              </View>
+
+                {expandedFlatId === f.id && (
+                  <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: Warm.cardBorder, paddingTop: 12, gap: 8 }}>
+                    {f.residents?.length > 0 ? f.residents.map((r: any) => (
+                      <View key={r.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Avatar name={r.name} size={24} color={Warm.accent} />
+                        <Text style={{ marginLeft: 8, fontSize: 13, fontWeight: '700', color: Warm.text }}>{r.name}</Text>
+                        <Text style={{ marginLeft: 'auto', fontSize: 12, color: Warm.textMuted }}>📞 {r.phone}</Text>
+                      </View>
+                    )) : (
+                      <Text style={{ color: Warm.textMuted, fontSize: 12, fontStyle: 'italic', textAlign: 'center', paddingVertical: 8 }}>
+                        No residents registered in this flat
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </TouchableOpacity>
             );
           })}
 
@@ -710,10 +921,15 @@ export function AdminDashboard({ navigation }: any) {
                   ID: {g.employee_id} · 📞 {g.user?.phone}
                 </Text>
               </View>
-              <View style={{ backgroundColor: g.shift === 'morning' ? Warm.amberDim : Warm.accentDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
-                <Text style={{ color: g.shift === 'morning' ? '#B45309' : Warm.accent, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' }}>
-                  {g.shift} Shift
-                </Text>
+              <View style={{ flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                <View style={{ backgroundColor: g.shift === 'morning' ? Warm.amberDim : Warm.accentDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                  <Text style={{ color: g.shift === 'morning' ? '#B45309' : Warm.accent, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' }}>
+                    {g.shift} Shift
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => deactivateGuard(g.id)} style={{ backgroundColor: Warm.redDim, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                  <Text style={{ color: Warm.red, fontSize: 10, fontWeight: '800' }}>DELETE</Text>
+                </TouchableOpacity>
               </View>
             </View>
           ))}
@@ -750,14 +966,102 @@ export function AdminDashboard({ navigation }: any) {
                   {s.contact_info && <Text style={{ color: Warm.accent, fontSize: 12, marginTop: 4, fontWeight: '600' }}>📞 {s.contact_info}</Text>}
                   {s.timing && <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>🕒 {s.timing}</Text>}
                 </View>
-                <View style={{ backgroundColor: s.status === 'active' ? Warm.greenDim : Warm.redDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
-                  <Text style={{ color: s.status === 'active' ? Warm.green : Warm.red, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' }}>
-                    {s.status}
-                  </Text>
+                <View style={{ flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                  <View style={{ backgroundColor: s.status === 'active' ? Warm.greenDim : Warm.redDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                    <Text style={{ color: s.status === 'active' ? Warm.green : Warm.red, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' }}>
+                      {s.status}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    <TouchableOpacity onPress={() => { setForm(s); setModal('add_service'); }} style={{ backgroundColor: Warm.accentDim, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
+                      <Text style={{ color: Warm.accent, fontSize: 10, fontWeight: '800' }}>EDIT</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => deleteService(s.id)} style={{ backgroundColor: Warm.redDim, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
+                      <Text style={{ color: Warm.red, fontSize: 10, fontWeight: '800' }}>DELETE</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             </View>
           ))}
+
+          <View style={{ marginTop: 30, marginBottom: 18 }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: Warm.text }}>Support Tickets</Text>
+            <Text style={{ fontSize: 12, color: Warm.textMuted, marginTop: 4 }}>
+              Manage and resolve issues reported by residents.
+            </Text>
+          </View>
+
+          {helpdeskTickets.length === 0 && (
+            <EmptyState icon="✅" title="All Clear" message="No open support tickets." />
+          )}
+
+          {helpdeskTickets.map((t: any) => {
+            const isClosed = t.status === 'resolved' || t.status === 'closed';
+            const isInProgress = t.status === 'in_progress';
+            const bgCol = isClosed ? '#F0FDF4' : isInProgress ? '#FEF3C7' : '#EFF6FF';
+            const borderCol = isClosed ? '#86EFAC' : isInProgress ? '#FDE047' : '#BFDBFE';
+            const badgeColor = isClosed ? 'green' : isInProgress ? 'amber' : 'blue';
+
+            return (
+              <View key={t.id} style={{
+                backgroundColor: bgCol, borderColor: borderCol, borderWidth: 1,
+                borderRadius: 16, padding: 16, marginBottom: 10, ...Warm.shadow,
+              }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1, paddingRight: 10 }}>
+                    <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>{t.title}</Text>
+                    <Text style={{ color: Warm.textMuted, fontSize: 13, marginTop: 4, lineHeight: 18 }}>{t.description}</Text>
+                    
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                      <Text style={{ fontSize: 12, color: Warm.textMuted }}>{formatTimestamp(t.created_at)}</Text>
+                      <Text style={{ fontSize: 12, color: Warm.textMuted }}>•</Text>
+                      <Text style={{ fontSize: 12, color: Warm.text, fontWeight: '600' }}>{t.creator_name}</Text>
+                    </View>
+                    
+                    {t.comments && (
+                      <View style={{ marginTop: 8, backgroundColor: 'rgba(255,255,255,0.6)', padding: 10, borderRadius: 8 }}>
+                        {(() => {
+                          try {
+                            const logs = JSON.parse(t.comments);
+                            if (Array.isArray(logs)) {
+                              return logs.map((log: any, idx: number) => (
+                                <View key={idx} style={{ marginBottom: idx < logs.length - 1 ? 8 : 0, borderBottomWidth: idx < logs.length - 1 ? 1 : 0, borderBottomColor: Warm.cardBorder, paddingBottom: idx < logs.length - 1 ? 8 : 0 }}>
+                                  <Text style={{ fontSize: 10, fontWeight: '800', color: Warm.textMuted, marginBottom: 2 }}>{log.author?.toUpperCase() || 'ADMIN'} • {formatTimestamp(log.timestamp)}</Text>
+                                  <Text style={{ fontSize: 13, color: Warm.text }}>{log.text}</Text>
+                                </View>
+                              ));
+                            }
+                          } catch {}
+                          return (
+                            <>
+                              <Text style={{ fontSize: 11, fontWeight: '800', color: Warm.textMuted, marginBottom: 2 }}>YOUR REPLY:</Text>
+                              <Text style={{ fontSize: 13, color: Warm.text }}>{t.comments}</Text>
+                            </>
+                          );
+                        })()}
+                      </View>
+                    )}
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                    <Badge color={badgeColor}>{t.status.replace('_', ' ')}</Badge>
+                    <Badge color={t.priority === 'high' ? 'red' : t.priority === 'medium' ? 'amber' : 'green'}>{t.priority}</Badge>
+                  </View>
+                </View>
+                
+                {!isClosed && (
+                  <View style={{ flexDirection: 'row', marginTop: 16, borderTopWidth: 1, borderTopColor: Warm.cardBorder, paddingTop: 12, gap: 10 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: Warm.accent, paddingVertical: 8, borderRadius: 10, alignItems: 'center' }}
+                      onPress={() => { setForm({ ...t, status: t.status === 'open' ? 'in_progress' : t.status }); setModal('update_ticket'); }}
+                    >
+                      <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 12 }}>Update Status</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </View>
       );
     }
@@ -875,9 +1179,8 @@ export function AdminDashboard({ navigation }: any) {
         elevation: 8,
       }}>
         {[
-          { id: 'dashboard', label: 'Overview', icon: '📊' },
-          { id: 'residents', label: 'Residents', icon: '👥' },
-          { id: 'maintenance', label: 'Dues', icon: '💰' },
+          { id: 'dashboard', label: 'Manage', icon: '📊' },
+          { id: 'directory', label: 'Directory', icon: '🏢' },
           { id: 'guards', label: 'Guards', icon: '🛡️' },
           { id: 'services', label: 'Services', icon: '🛠️' },
         ].map((tab) => {
@@ -931,6 +1234,14 @@ export function AdminDashboard({ navigation }: any) {
             value={form?.employee_id || ''}
             onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), employee_id: v }))}
           />
+          <Input
+            label="4-Digit Kiosk PIN (Optional)"
+            placeholder="e.g. 1234"
+            maxLength={4}
+            keyboardType="number-pad"
+            value={form?.shift_pin || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), shift_pin: v.replace(/[^0-9]/g, '') }))}
+          />
           <Select
             label="Duty Shift"
             value={form?.shift || 'morning'}
@@ -940,7 +1251,7 @@ export function AdminDashboard({ navigation }: any) {
               { value: 'night', label: 'Night Shift (18:00 - 06:00)' },
             ]}
           />
-          <Btn full variant="green" onClick={createGuard} style={{ marginTop: 12 }}>
+          <Btn full variant="green" onClick={createGuard} loading={saving} style={{ marginTop: 12 }}>
             Register Guard Account →
           </Btn>
         </Modal>
@@ -948,7 +1259,7 @@ export function AdminDashboard({ navigation }: any) {
 
       {/* ── Add Service Modal ── */}
       {modal === 'add_service' && (
-        <Modal title="Add Society Amenity" subtitle="Register a facility or service contact" onClose={() => setModal(null)}>
+        <Modal title={form?.id ? "Edit Amenity" : "Add Society Amenity"} subtitle="Register a facility or service contact" onClose={() => setModal(null)}>
           <Input
             label="Contact Name / Service Provider *"
             placeholder="Name"
@@ -985,8 +1296,100 @@ export function AdminDashboard({ navigation }: any) {
             value={form?.description || ''}
             onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), description: v }))}
           />
-          <Btn full variant="green" onClick={createService} style={{ marginTop: 12 }}>
+          <Btn full variant="green" onClick={saveService} loading={saving} style={{ marginTop: 12 }}>
             Save Amenity →
+          </Btn>
+        </Modal>
+      )}
+
+      {modal === 'offline_payment' && (
+        <Modal title="Offline Payment" subtitle={`Mark Flat ${form.flat_number} maintenance as paid`} onClose={() => setModal(null)}>
+          <Input
+            label="Amount Paid (₹) *"
+            keyboardType="number-pad"
+            value={String(form.amount || '')}
+            onChange={(v: string) => setForm({ ...form, amount: parseInt(v) || 0 })}
+          />
+          <Input
+            label="Months Added *"
+            keyboardType="number-pad"
+            value={String(form.months_added || '')}
+            onChange={(v: string) => setForm({ ...form, months_added: parseInt(v) || 0 })}
+          />
+          <Input
+            label="Reference (e.g. UTR / Cash Receipt)"
+            placeholder="Optional"
+            value={form.utr_number || ''}
+            onChange={(v: string) => setForm({ ...form, utr_number: v })}
+          />
+          <Btn full variant="green" onClick={processOfflinePayment} loading={saving} style={{ marginTop: 16 }}>
+            Confirm Payment
+          </Btn>
+        </Modal>
+      )}
+
+      {modal === 'update_ticket' && (
+        <Modal visible onClose={() => { setModal(null); setForm({}); }} title={`Update Ticket: ${form.title}`}>
+          <Select
+            label="Status"
+            value={form?.status || 'open'}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), status: v }))}
+            options={[
+              { value: 'open', label: '🟡 Open' },
+              { value: 'in_progress', label: '🔵 In Progress' },
+              { value: 'resolved', label: '🟢 Resolved' },
+              { value: 'closed', label: '⚪ Closed' },
+            ]}
+          />
+          <Select
+            label="Priority"
+            value={form?.priority || 'medium'}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), priority: v }))}
+            options={[
+              { value: 'low', label: '🟢 Low' },
+              { value: 'medium', label: '🟡 Medium' },
+              { value: 'high', label: '🔴 High (Urgent)' },
+            ]}
+          />
+          <Input
+            label="Admin Reply / Comments"
+            placeholder="e.g. Electrician has been dispatched"
+            value={form?.comments || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), comments: v }))}
+            multiline
+          />
+          <Btn full variant="primary" onClick={updateTicket} style={{ marginTop: 16 }}>
+            Save Updates
+          </Btn>
+        </Modal>
+      )}
+
+      {modal === 'create_announcement' && (
+        <Modal visible onClose={() => { setModal(null); setForm({}); }} title="New Announcement">
+          <Input
+            label="Title *"
+            placeholder="e.g. Park Cleaning on Sunday"
+            value={form?.title || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), title: v }))}
+          />
+          <Input
+            label="Body / Details *"
+            placeholder="Details of the announcement"
+            value={form?.body || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), body: v }))}
+            multiline
+          />
+          <Select
+            label="Priority"
+            value={form?.priority || 'normal'}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), priority: v }))}
+            options={[
+              { value: 'normal', label: '📢 Normal' },
+              { value: 'urgent', label: '🚨 Urgent (Push Notification)' },
+            ]}
+          />
+          <Btn full variant="primary" onClick={createAnnouncement} style={{ marginTop: 16 }}>
+            Broadcast Announcement
           </Btn>
         </Modal>
       )}

@@ -6,7 +6,8 @@ from app.database import SessionLocal, engine
 from app.models import (
     VisitorLog, PreApproval, FrequentPass,
     MaintenanceBill, MaintenancePayment, PanicAlert, Announcement,
-    FlatUser, Guard, User, Flat, Society, SocietyAdmin, Gate, Visitor, VisitorRating, Notification
+    FlatUser, Guard, User, Flat, Society, SocietyAdmin, Gate, Visitor, VisitorRating, Notification,
+    SecurityAgency, ParkingViolation, HelpdeskTicket
 )
 import sqlalchemy as sa
 
@@ -23,6 +24,7 @@ def super_wipe():
             VisitorLog, PreApproval, FrequentPass,
             MaintenancePayment, MaintenanceBill, PanicAlert, Announcement,
             FlatUser, SocietyAdmin, Guard, VisitorRating, Notification,
+            SecurityAgency, ParkingViolation, HelpdeskTicket,
             Gate, Flat, Visitor, Society
         ]
 

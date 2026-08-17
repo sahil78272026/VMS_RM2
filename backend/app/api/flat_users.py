@@ -162,8 +162,13 @@ async def approve_family_member(user_id: int, request: Request, db: Session = De
         if not target or target.requested_flat_id != requester.flat_id:
             raise AppException("User not found or invalid flat", "NOT_FOUND", 404)
             
-        data = await request.json()
-        relation = data.get("relation", "family")
+        data = await request.json() if request.method == "POST" else {}
+        try:
+            data = await request.json()
+        except:
+            data = {}
+            
+        relation = data.get("role", "spouse")
         
         target.status = "active"
         target.move_in_date = target.move_in_date or __import__('datetime').date.today()
@@ -173,14 +178,48 @@ async def approve_family_member(user_id: int, request: Request, db: Session = De
             user_id=target.id,
             flat_id=requester.flat_id,
             role=relation,
-            is_owner=False,
+            is_owner=data.get("is_owner", target.requested_is_owner),
             can_approve=False,
             move_in_date=target.move_in_date
         )
         db.add(flat_user)
+        db.commit()
         db.commit()
         return success("Family member approved", data=flat_user.to_dict())
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)
     except Exception as e:
         return error("Failed to approve family member", "SERVER_ERROR", str(e), 500)
+
+@router.post("/move-out")
+async def move_out(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Resident: move out of current flat."""
+    try:
+        from app.models import FlatUser, Flat
+        flat_user_service = FlatUserService(db)
+        # Find active assignment
+        flat_user = db.query(FlatUser).filter_by(user_id=current_user.id).filter(FlatUser.move_out_date.is_(None)).first()
+        if not flat_user:
+            raise AppException("You are not assigned to a flat", "NOT_FOUND", 404)
+
+        # Use remove_member which sets move_out_date
+        # Wait, remove_member prevents primary from moving out. Let's do it directly.
+        flat_id = flat_user.flat_id
+        flat_user.move_out_date = __import__('datetime').date.today()
+        flat_user.can_approve = False
+        db.add(flat_user)
+        
+        # Check if any primaries left
+        active_primaries = db.query(FlatUser).filter_by(flat_id=flat_id, role="primary").filter(FlatUser.move_out_date.is_(None)).count()
+        if active_primaries == 0:
+            flat = db.query(Flat).filter_by(id=flat_id).first()
+            if flat:
+                flat.status = "vacant"
+                db.add(flat)
+                
+        db.commit()
+        return success("Successfully moved out of flat")
+    except AppException as e:
+        return error(e.message, e.code, e.details, e.status_code)
+    except Exception as e:
+        return error("Failed to move out", "SERVER_ERROR", str(e), 500)

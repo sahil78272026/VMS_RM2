@@ -26,13 +26,26 @@ async def start_shift(request: Request, db: Session = Depends(get_db), current_u
     try:
         guard_repo = GuardRepository(db)
         session_service = GateSessionService(db)
-        user_id  = current_user.id
-        guard    = guard_repo.get_by_user(user_id)
-        if not guard:
-            return error("Guard profile not found", "NOT_FOUND", status_code=404)
+        data = await request.json()
+        
+        target_guard_id = data.get("target_guard_id")
+        pin = data.get("pin")
+        
+        if target_guard_id and pin:
+            import bcrypt
+            target_guard = guard_repo.get_by_id(target_guard_id)
+            if not target_guard:
+                return error("Target guard profile not found", "NOT_FOUND", status_code=404)
+            if not target_guard.shift_pin_hash or not bcrypt.checkpw(str(pin).encode('utf-8'), str(target_guard.shift_pin_hash).encode('utf-8')):
+                return error("Invalid PIN for guard", "UNAUTHORIZED", status_code=401)
+            active_guard = target_guard
+        else:
+            user_id = current_user.id
+            active_guard = guard_repo.get_by_user(user_id)
+            if not active_guard:
+                return error("Guard profile not found", "NOT_FOUND", status_code=404)
 
-        data     = await request.json()
-        session  = session_service.start_shift(guard.id, data.get("gate_id"))
+        session = session_service.start_shift(active_guard.id, data.get("gate_id"), data.get("guard_name"))
         return success("Shift started successfully", data=session.to_dict(), status_code=201)
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)
@@ -46,8 +59,20 @@ async def end_shift(request: Request, db: Session = Depends(get_db), current_use
     try:
         guard_repo = GuardRepository(db)
         session_service = GateSessionService(db)
-        user_id = current_user.id
-        guard   = guard_repo.get_by_user(user_id)
+        # Check if a specific guard is targeted via JSON payload
+        data = {}
+        try:
+            data = await request.json()
+        except:
+            pass
+            
+        target_guard_id = data.get("target_guard_id")
+        if target_guard_id:
+            guard = guard_repo.get_by_id(target_guard_id)
+        else:
+            user_id = current_user.id
+            guard = guard_repo.get_by_user(user_id)
+            
         if not guard:
             return error("Guard profile not found", "NOT_FOUND", status_code=404)
 
@@ -92,7 +117,8 @@ async def get_active_sessions(request: Request, db: Session = Depends(get_db), c
     try:
         guard_repo = GuardRepository(db)
         session_service = GateSessionService(db)
-        sessions = session_service.get_active()
+        society_id = request.headers.get("X-Society-ID")
+        sessions = session_service.get_active(society_id=society_id)
         return success("Active sessions fetched", data=[s.to_dict() for s in sessions])
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)

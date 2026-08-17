@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, Image, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, Alert, Image, ScrollView, Dimensions, ActivityIndicator, Animated } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { useAuth } from '../../context/AuthContext';
-import { T, Card, Btn, Input, PageLayout, Badge, Modal } from '../../components/UI';
+import { T, Card, Btn, Input, PageLayout, Badge, Modal, SearchableSelect, Select } from '../../components/UI';
 import { AuthService, FlatService, SocietyService } from '../../services';
 import { Picker } from '@react-native-picker/picker';
 
@@ -131,6 +132,18 @@ export function LoginScreen({ navigation }: any) {
   const [devOtp, setDevOtp] = useState<string | null>(null);
   const [timer, setTimer] = useState(30);
 
+  const shakeAnimation = useRef(new Animated.Value(0)).current;
+
+  const triggerShake = () => {
+    shakeAnimation.setValue(0);
+    Animated.sequence([
+      Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnimation, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnimation, { toValue: 0, duration: 50, useNativeDriver: true })
+    ]).start();
+  };
+
   // Countdown timer for OTP Resend
   useEffect(() => {
     let interval: any = null;
@@ -147,6 +160,7 @@ export function LoginScreen({ navigation }: any) {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     if (cleanPhone.length !== 10) {
       setErrorMsg('Mobile number must be exactly 10 digits.');
+      triggerShake();
       return;
     }
     setLoading(true);
@@ -160,6 +174,7 @@ export function LoginScreen({ navigation }: any) {
     } catch (err: any) {
       const serverMsg = err.response?.data?.message || err.response?.data?.error?.details || 'Unable to send OTP. Please try again.';
       setErrorMsg(typeof serverMsg === 'string' ? serverMsg : JSON.stringify(serverMsg));
+      triggerShake();
     } finally {
       setLoading(false);
     }
@@ -171,6 +186,7 @@ export function LoginScreen({ navigation }: any) {
     const cleanOtp = otp.trim();
     if (!cleanOtp || cleanOtp.length < 6) {
       setErrorMsg('Please enter the complete 6-digit OTP code.');
+      triggerShake();
       return;
     }
     setLoading(true);
@@ -183,6 +199,7 @@ export function LoginScreen({ navigation }: any) {
     } catch (err: any) {
       const serverMsg = err.response?.data?.message || err.response?.data?.error?.details || 'Invalid verification code. Please try again.';
       setErrorMsg(typeof serverMsg === 'string' ? serverMsg : JSON.stringify(serverMsg));
+      triggerShake();
     } finally {
       setLoading(false);
     }
@@ -218,72 +235,65 @@ export function LoginScreen({ navigation }: any) {
         </Text>
       </View>
 
-      {/* Error Alert Banner */}
-      {errorMsg ? (
-        <View style={{
-          backgroundColor: '#EF444414',
-          borderColor: '#EF4444',
-          borderWidth: 1,
-          borderRadius: 14,
-          padding: 14,
-          marginBottom: 16,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 10,
-        }}>
-          <Text style={{ fontSize: 18 }}>⚠️</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: '#DC2626', fontSize: 13, fontWeight: '700' }}>
-              Authentication Failed
-            </Text>
-            <Text style={{ color: '#B91C1C', fontSize: 12, marginTop: 2, lineHeight: 16 }}>
-              {errorMsg}
-            </Text>
-          </View>
-        </View>
-      ) : null}
 
       {/* ── STEP 1: ENTER PHONE NUMBER (OTP ONLY) ─────────────────────────── */}
       {step === 'phone' && (
-        <Card style={{ padding: 20 }}>
-          <Text style={{ fontSize: 13, fontWeight: '600', color: T.muted, marginBottom: 14 }}>
-            Enter your mobile number to receive a one-time verification code:
-          </Text>
+        <Animated.View style={{ transform: [{ translateX: shakeAnimation }] }}>
+          <Card style={{ padding: 24, borderWidth: 1, borderColor: T.border, shadowOpacity: 0 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 }}>
+            <View style={{ backgroundColor: T.surface2, padding: 10, borderRadius: 12 }}>
+              <Text style={{ fontSize: 20 }}>🛡️</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 17, fontWeight: '800', color: T.text }}>Secure Sign In</Text>
+              <Text style={{ fontSize: 13, color: T.muted, marginTop: 2 }}>
+                We will send an OTP to verify your identity.
+              </Text>
+            </View>
+          </View>
 
           <Input
             label="Mobile Number"
-            placeholder="e.g. 9876543210"
+            placeholder="9876543210"
             maxLength={10}
             keyboardType="number-pad"
             value={phone}
+            error={errorMsg}
             onChange={(v: string) => {
               const numericValue = v.replace(/[^0-9]/g, '');
               setPhone(numericValue);
               setErrorMsg(null);
             }}
-            icon="📞"
+            icon="🇮🇳 +91"
           />
 
           <Btn
             full
             disabled={loading}
             onClick={handleSendOtp}
-            style={{ marginTop: 8, paddingVertical: 14, borderRadius: 12 }}
+            style={{ marginTop: 12, paddingVertical: 15, borderRadius: 12 }}
           >
-            {loading ? 'Sending Code...' : 'Get Verification Code →'}
+            {loading ? 'Sending OTP...' : 'Get OTP'}
           </Btn>
         </Card>
+        </Animated.View>
       )}
 
       {/* ── STEP 2: ENTER OTP CODE ────────────────────────────────────────── */}
       {step === 'otp' && (
-        <Card style={{ padding: 20 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <View>
-              <Text style={{ fontSize: 12, color: T.muted, fontWeight: '500' }}>Mobile Number</Text>
-              <Text style={{ fontSize: 15, fontWeight: '700', color: T.text, marginTop: 2 }}>
-                +91 {phone}
-              </Text>
+        <Animated.View style={{ transform: [{ translateX: shakeAnimation }] }}>
+          <Card style={{ padding: 24, borderWidth: 1, borderColor: T.border, shadowOpacity: 0 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ backgroundColor: T.surface2, padding: 10, borderRadius: 12 }}>
+                <Text style={{ fontSize: 20 }}>📲</Text>
+              </View>
+              <View>
+                <Text style={{ fontSize: 13, color: T.muted, fontWeight: '500' }}>Mobile Number</Text>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: T.text, marginTop: 2 }}>
+                  +91 {phone}
+                </Text>
+              </View>
             </View>
             <TouchableOpacity
               onPress={() => {
@@ -293,20 +303,19 @@ export function LoginScreen({ navigation }: any) {
               style={{
                 backgroundColor: T.surface2,
                 paddingHorizontal: 12,
-                paddingVertical: 6,
+                paddingVertical: 8,
                 borderRadius: 8,
-                borderWidth: 1,
-                borderColor: T.border,
               }}
             >
-              <Text style={{ fontSize: 12, color: T.accent, fontWeight: '700' }}>✏️ Change</Text>
+              <Text style={{ fontSize: 12, color: T.accent, fontWeight: '700' }}>Change</Text>
             </TouchableOpacity>
           </View>
 
           <Input
-            label="6-Digit Verification Code"
+            label="6-Digit OTP"
             placeholder="• • • • • •"
             value={otp}
+            error={errorMsg}
             onChange={(v: string) => {
               setOtp(v);
               setErrorMsg(null);
@@ -339,17 +348,22 @@ export function LoginScreen({ navigation }: any) {
             full
             disabled={loading}
             onClick={handleVerifyOtp}
-            style={{ paddingVertical: 14, borderRadius: 12 }}
+            style={{ paddingVertical: 15, borderRadius: 12 }}
           >
-            {loading ? 'Verifying...' : 'Verify & Sign In →'}
+            {loading ? 'Verifying...' : 'Verify OTP'}
           </Btn>
 
           {/* Resend OTP Action */}
-          <View style={{ alignItems: 'center', marginTop: 16 }}>
+          <View style={{ alignItems: 'center', marginTop: 20 }}>
             {timer > 0 ? (
-              <Text style={{ color: T.muted, fontSize: 13, fontWeight: '500' }}>
-                Resend code in <Text style={{ color: T.text, fontWeight: '700' }}>0:{timer < 10 ? `0${timer}` : timer}</Text>
-              </Text>
+              <View style={{ width: '100%', alignItems: 'center' }}>
+                <Text style={{ color: T.muted, fontSize: 13, fontWeight: '500', marginBottom: 8 }}>
+                  Resend code in 0:{timer < 10 ? `0${timer}` : timer}
+                </Text>
+                <View style={{ width: '100%', height: 6, backgroundColor: T.border, borderRadius: 3, overflow: 'hidden' }}>
+                  <View style={{ width: `${((30 - timer) / 30) * 100}%`, height: '100%', backgroundColor: T.accent }} />
+                </View>
+              </View>
             ) : (
               <TouchableOpacity
                 onPress={handleSendOtp}
@@ -363,6 +377,7 @@ export function LoginScreen({ navigation }: any) {
             )}
           </View>
         </Card>
+        </Animated.View>
       )}
     </PageLayout>
   );
@@ -384,6 +399,7 @@ export function RegisterScreen({ navigation, route }: any) {
     phone: verifiedPhone,
     flat_id: '',
     email: '',
+    is_owner: false,
   });
   const [loading, setLoading] = useState(false);
 
@@ -412,9 +428,10 @@ export function RegisterScreen({ navigation, route }: any) {
       return;
     }
     setLoadingFlats(true);
-    FlatService.getAll({ society_id: selectedSocietyId, per_page: 1000 })
+    FlatService.getAll({ society_id: selectedSocietyId, per_page: 5000 })
       .then((r: any) => {
         const items = r.data?.data?.items || r.data?.data || [];
+        items.sort((a: any, b: any) => a.flat_number.replace(/\d+/g, (n: any) => n.padStart(5, '0')).localeCompare(b.flat_number.replace(/\d+/g, (n: any) => n.padStart(5, '0'))));
         setFlats(items);
         setForm((prev) => ({ ...prev, flat_id: '' }));
       })
@@ -448,6 +465,7 @@ export function RegisterScreen({ navigation, route }: any) {
         phone: form.phone.trim(),
         society_id: parseInt(selectedSocietyId),
         flat_id: parseInt(form.flat_id),
+        is_owner: form.is_owner,
         move_in_date: new Date().toISOString().split('T')[0],
       });
       // User is now authenticated in AuthContext and will be automatically redirected to ResidentDashboard!
@@ -591,43 +609,39 @@ export function RegisterScreen({ navigation, route }: any) {
         <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>
           2. Select Flat Number *
         </Text>
-        <View style={{ backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, marginBottom: 16 }}>
-          {loadingFlats ? (
-            <View style={{ padding: 14, flexDirection: 'row', alignItems: 'center' }}>
-              <ActivityIndicator size="small" color={T.accent} style={{ marginRight: 8 }} />
-              <Text style={{ color: T.muted }}>Loading flats for society...</Text>
-            </View>
-          ) : (
-            <Picker
-              selectedValue={form.flat_id}
-              enabled={!loadingFlats && flats.length > 0}
-              onValueChange={(v: string) => {
-                setForm({ ...form, flat_id: v });
-                setErrorMsg(null);
-              }}
-              style={{ color: T.text }}
-              dropdownIconColor={T.muted}
-            >
-              <Picker.Item
-                label={flats.length === 0 ? 'No flats available' : 'Select your flat number...'}
-                value=""
-                color={T.muted}
-              />
-              {flats.map((f) => (
-                <Picker.Item
-                  key={f.id}
-                  label={`Flat ${f.flat_number}`}
-                  value={f.id.toString()}
-                  color={getFlatColor(f.flat_number)}
-                />
-              ))}
-            </Picker>
-          )}
-        </View>
+        {loadingFlats ? (
+          <View style={{ backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+            <ActivityIndicator size="small" color={T.accent} style={{ marginRight: 8 }} />
+            <Text style={{ color: T.muted }}>Loading flats for society...</Text>
+          </View>
+        ) : (
+          <SearchableSelect
+            value={form.flat_id}
+            onChange={(v: string) => {
+              setForm({ ...form, flat_id: v });
+              setErrorMsg(null);
+            }}
+            options={flats.map((f: any) => ({ label: `Flat ${f.flat_number}`, value: f.id.toString(), color: getFlatColor(f.flat_number) }))}
+            placeholder={flats.length === 0 ? 'No flats available' : 'Select your flat number...'}
+          />
+        )}
 
-        {/* Step 4: Name Input */}
+        {/* Step 4: Occupancy Type */}
         <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>
-          3. Your Full Name *
+          3. Occupancy Type *
+        </Text>
+        <Select
+          value={form.is_owner ? 'true' : 'false'}
+          onChange={(v: string) => setForm({ ...form, is_owner: v === 'true' })}
+          options={[
+            { label: 'Tenant / Rented', value: 'false' },
+            { label: 'Owner', value: 'true' }
+          ]}
+        />
+
+        {/* Step 5: Name Input */}
+        <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>
+          4. Your Full Name *
         </Text>
         <Input
           placeholder="e.g. John Doe"

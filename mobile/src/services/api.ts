@@ -10,7 +10,7 @@ export const BASE_URL = process.env.EXPO_PUBLIC_API_URL || `http://${localhost}:
 const api = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 15000,
+  timeout: 60000,
 });
 
 api.interceptors.request.use(async (config) => {

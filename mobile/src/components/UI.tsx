@@ -49,12 +49,16 @@ export const Avatar = ({ name='?', size=38, color=T.accent }: any) => {
   );
 };
 
-export const Btn = ({ children, onClick, variant='primary', sm, full, disabled, style }: any) => {
+export const Btn = ({ children, onClick, variant='primary', sm, full, disabled, loading, style }: any) => {
   const S: any = { primary:{bg:T.accent,fg:T.bg}, green:{bg:T.green,fg:T.bg}, red:{bg:T.red,fg:'#fff'}, ghost:{bg:'transparent',fg:T.muted,border:T.border}, outline:{bg:'transparent',fg:T.accent,border:T.accent+'55'}, amber:{bg:T.amber,fg:T.bg} };
   const s = S[variant] || S.primary;
   return (
-    <TouchableOpacity disabled={disabled} onPress={onClick} style={[{ backgroundColor: variant==='ghost'||variant==='outline'?'transparent':s.bg, borderColor: s.border || 'transparent', borderWidth: s.border ? 1 : 0, borderRadius: 10, paddingVertical: sm ? 8 : 12, paddingHorizontal: sm ? 14 : 22, opacity: disabled ? 0.5 : 1, width: full ? '100%' : 'auto', alignItems: 'center', justifyContent: 'center' }, style]}>
-      <Text style={{ color: s.fg, fontWeight: '600', fontSize: sm ? 13 : 15 }}>{children}</Text>
+    <TouchableOpacity disabled={disabled || loading} onPress={onClick} style={[{ backgroundColor: variant==='ghost'||variant==='outline'?'transparent':s.bg, borderColor: s.border || 'transparent', borderWidth: s.border ? 1 : 0, borderRadius: 10, paddingVertical: sm ? 8 : 12, paddingHorizontal: sm ? 14 : 22, opacity: disabled || loading ? 0.7 : 1, width: full ? '100%' : 'auto', alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }, style]}>
+      {loading ? (
+        <ActivityIndicator color={s.fg} size="small" />
+      ) : (
+        <Text style={{ color: s.fg, fontWeight: '600', fontSize: sm ? 13 : 15 }}>{children}</Text>
+      )}
     </TouchableOpacity>
   );
 };
@@ -79,6 +83,7 @@ export const Input = ({
   autoComplete,
   style,
   inputStyle,
+  error
 }: any) => {
   const lowerLabel = (label || '').toLowerCase();
   const lowerPlaceholder = (placeholder || '').toLowerCase();
@@ -175,7 +180,7 @@ export const Input = ({
           {label} {required && <Text style={{ color: T.red }}>*</Text>}
         </Text>
       )}
-      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: T.bg, borderColor: error ? T.red : T.border, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14 }}>
         {icon && <Text style={{ fontSize: 16, marginRight: 10, opacity: 0.6 }}>{icon}</Text>}
         <TextInput
           style={[{ flex: 1, color: T.text, fontSize: 15, paddingVertical: 12 }, inputStyle]}
@@ -199,6 +204,12 @@ export const Input = ({
           </TouchableOpacity>
         ) : null}
       </View>
+      {error ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, paddingHorizontal: 2 }}>
+          <Text style={{ fontSize: 12, marginRight: 4 }}>⚠️</Text>
+          <Text style={{ color: T.red, fontSize: 12, fontWeight: '600' }}>{error}</Text>
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -214,6 +225,132 @@ export const Select = ({ label, value, onChange, options, placeholder, required 
     </View>
   </View>
 );
+
+export const SearchableSelect = ({ label, value, onChange, options, placeholder, required }: any) => {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [search, setSearch] = useState('');
+  
+  const normalizedSearch = search.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const filtered = options.filter((o: any) => 
+    o.label.toLowerCase().replace(/[^a-z0-9]/g, '').includes(normalizedSearch)
+  );
+  const selectedLabel = options.find((o: any) => o.value === value)?.label || placeholder;
+
+  return (
+    <View style={{ marginBottom: 12 }}>
+      {label && <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>{label} {required && <Text style={{color: T.red}}>*</Text>}</Text>}
+      <TouchableOpacity onPress={() => setModalVisible(true)} style={{ backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ color: value ? T.text : T.dim, fontSize: 15 }}>{selectedLabel}</Text>
+        <Text style={{ color: T.muted }}>▼</Text>
+      </TouchableOpacity>
+
+      <RNModal transparent visible={modalVisible} animationType="fade" onRequestClose={() => setModalVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: '#00000088', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: T.surface, borderRadius: 20, padding: 20, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: T.text }}>{placeholder}</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}><Text style={{ color: T.muted, fontSize: 24 }}>✕</Text></TouchableOpacity>
+            </View>
+            <TextInput
+              style={{ backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 16, fontSize: 15, color: T.text }}
+              placeholder="Search..."
+              placeholderTextColor={T.dim}
+              value={search}
+              onChangeText={setSearch}
+              autoCapitalize="none"
+              autoFocus
+            />
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {filtered.map((o: any) => (
+                <TouchableOpacity
+                  key={o.value}
+                  onPress={() => {
+                    onChange(o.value);
+                    setModalVisible(false);
+                    setSearch('');
+                  }}
+                  style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: T.border }}
+                >
+                  <Text style={{ color: o.color || T.text, fontSize: 16, fontWeight: value === o.value ? '700' : '500' }}>{o.label}</Text>
+                </TouchableOpacity>
+              ))}
+              {filtered.length === 0 && <Text style={{ color: T.muted, textAlign: 'center', marginTop: 20 }}>No results found</Text>}
+            </ScrollView>
+          </View>
+        </View>
+      </RNModal>
+    </View>
+  );
+};
+
+export const MultiSearchableSelect = ({ label, value = [], onChange, options, placeholder, required }: any) => {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [search, setSearch] = useState('');
+  
+  const normalizedSearch = search.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const filtered = options.filter((o: any) => 
+    o.label.toLowerCase().replace(/[^a-z0-9]/g, '').includes(normalizedSearch)
+  );
+  
+  const selectedLabels = value.map((v: string) => options.find((o: any) => o.value === v)?.label).filter(Boolean);
+  const displayLabel = selectedLabels.length > 0 ? selectedLabels.join(', ') : placeholder;
+
+  const toggleOption = (val: string) => {
+    if (value.includes(val)) {
+      onChange(value.filter((v: string) => v !== val));
+    } else {
+      onChange([...value, val]);
+    }
+  };
+
+  return (
+    <View style={{ marginBottom: 12 }}>
+      {label && <Text style={{ fontSize: 12, color: T.muted, textTransform: 'uppercase', marginBottom: 6, fontWeight: '600' }}>{label} {required && <Text style={{color: T.red}}>*</Text>}</Text>}
+      <TouchableOpacity onPress={() => setModalVisible(true)} style={{ backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ color: value.length > 0 ? T.text : T.dim, fontSize: 15 }} numberOfLines={1}>{displayLabel}</Text>
+        <Text style={{ color: T.muted }}>▼</Text>
+      </TouchableOpacity>
+
+      <RNModal transparent visible={modalVisible} animationType="fade" onRequestClose={() => setModalVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: '#00000088', justifyContent: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: T.surface, borderRadius: 20, padding: 20, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16, alignItems: 'center' }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: T.text }}>{placeholder}</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}><Text style={{ color: T.muted, fontSize: 24 }}>✕</Text></TouchableOpacity>
+            </View>
+            <TextInput
+              style={{ backgroundColor: T.bg, borderColor: T.border, borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 16, fontSize: 15, color: T.text }}
+              placeholder="Search..."
+              placeholderTextColor={T.dim}
+              value={search}
+              onChangeText={setSearch}
+              autoCapitalize="none"
+            />
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {filtered.map((o: any) => {
+                const isSelected = value.includes(o.value);
+                return (
+                  <TouchableOpacity
+                    key={o.value}
+                    onPress={() => toggleOption(o.value)}
+                    style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: T.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+                  >
+                    <Text style={{ color: o.color || T.text, fontSize: 16, fontWeight: isSelected ? '800' : '500' }}>{o.label}</Text>
+                    {isSelected && <Text style={{ color: T.accent, fontSize: 18, fontWeight: '800' }}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+              {filtered.length === 0 && <Text style={{ color: T.muted, textAlign: 'center', marginTop: 20 }}>No results found</Text>}
+            </ScrollView>
+            <TouchableOpacity onPress={() => setModalVisible(false)} style={{ backgroundColor: T.accent, padding: 14, borderRadius: 12, marginTop: 16, alignItems: 'center' }}>
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </RNModal>
+    </View>
+  );
+};
 
 export const Textarea = ({ label, value, onChange, placeholder, required, keyboardType = 'default', autoCapitalize = 'sentences' }: any) => (
   <View style={{ marginBottom: 12 }}>
@@ -446,7 +583,7 @@ export const SocietySwitcher = ({ style, theme = 'dark', flatNumber }: any) => {
 
   const isWarm = theme === 'warm';
 
-  const handleSelect = async (id: number) => {
+  const handleSelect = async (id: string) => {
     setSwitching(true);
     try {
       await switchSociety(id);
@@ -455,9 +592,9 @@ export const SocietySwitcher = ({ style, theme = 'dark', flatNumber }: any) => {
     setSwitching(false);
   };
 
-  const displayName = flatNumber 
-    ? `${activeSociety?.name || 'RM2'} ${flatNumber}`
-    : (activeSociety?.name || 'Select Society');
+  const displayName = activeSociety 
+    ? `${activeSociety.society_name} (${activeSociety.role.charAt(0).toUpperCase() + activeSociety.role.slice(1)})`
+    : 'Select Profile';
 
   return (
     <>
@@ -503,8 +640,8 @@ export const SocietySwitcher = ({ style, theme = 'dark', flatNumber }: any) => {
           <View style={{ backgroundColor: isWarm ? '#FFFFFF' : T.surface, borderRadius: 20, padding: 24, maxHeight: '80%', borderWidth: 1, borderColor: isWarm ? '#E5DFD7' : T.border }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <View>
-                <Text style={{ fontSize: 18, fontWeight: '800', color: isWarm ? '#1E293B' : T.text }}>Switch Society</Text>
-                <Text style={{ fontSize: 12, color: isWarm ? '#64748B' : T.muted, marginTop: 2 }}>Select a community to manage or view</Text>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: isWarm ? '#1E293B' : T.text }}>Switch Profile</Text>
+                <Text style={{ fontSize: 12, color: isWarm ? '#64748B' : T.muted, marginTop: 2 }}>Select a profile to use</Text>
               </View>
               <TouchableOpacity onPress={() => setModalVisible(false)} style={{ padding: 4 }}>
                 <Text style={{ color: isWarm ? '#64748B' : T.muted, fontSize: 22 }}>✕</Text>
@@ -533,10 +670,10 @@ export const SocietySwitcher = ({ style, theme = 'dark', flatNumber }: any) => {
                     <Text style={{ fontSize: 24, marginRight: 12 }}>🏢</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: isSelected ? '#0284C7' : (isWarm ? '#1E293B' : T.text), fontWeight: '800', fontSize: 15 }}>
-                        {s.name}
+                        {s.society_name}
                       </Text>
                       <Text style={{ color: isWarm ? '#64748B' : T.muted, fontSize: 12, marginTop: 2 }}>
-                        {s.city ? `${s.city} · ` : ''}{s.total_flats} Flats
+                        {s.role.charAt(0).toUpperCase() + s.role.slice(1)} {s.flat_number ? `· Flat ${s.flat_number}` : ''}
                       </Text>
                     </View>
                     {isSelected && (

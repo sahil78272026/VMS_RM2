@@ -19,7 +19,7 @@ class GateSessionService:
         self.repo      = GateSessionRepository(db)
         self.gate_repo = GateRepository(db)
 
-    def start_shift(self, guard_id: int, gate_id: int):
+    def start_shift(self, guard_id: int, gate_id: int, guard_name: str = None):
         """
         Guard starts shift at a specific gate.
         Closes any lingering open session first (safety net).
@@ -41,6 +41,7 @@ class GateSessionService:
         session = GateSession(
             society_id  = gate.society_id,
             guard_id    = guard_id,
+            guard_name  = guard_name,
             gate_id     = gate_id,
             shift_start = datetime.utcnow(),
         )
@@ -59,8 +60,8 @@ class GateSessionService:
         logger.info(f"[GATE_SESSION] Shift ended — guard {guard_id}")
         return session
 
-    def get_active(self):
-        return self.repo.get_all_active()
+    def get_active(self, society_id: int = None):
+        return self.repo.get_all_active(society_id=society_id)
 
     def get_by_guard(self, guard_id: int):
         return self.repo.get_by_guard(guard_id)

@@ -24,7 +24,7 @@ class FrequentPassService:
     def get_by_flat_user(self, flat_user_id: int):
         return self.repo.get_active_by_flat_user(flat_user_id)
 
-    def create(self, flat_user_id: int, data: dict):
+    def create(self, society_id: int, flat_user_id: int, data: dict):
         errors = {}
         if not data.get("visitor_phone"):  errors["visitor_phone"]  = "Required"
         if not data.get("visitor_name"):   errors["visitor_name"]   = "Required"
@@ -43,13 +43,14 @@ class FrequentPassService:
             raise ValidationError({"allowed_days": f"Invalid days: {invalid_days}. Use: mon,tue,wed,thu,fri,sat,sun"})
 
         # Get or create visitor identity
-        visitor = self.visitor_repo.get_by_phone(data["visitor_phone"])
+        visitor = self.visitor_repo.get_by_phone(data["visitor_phone"], society_id)
         if not visitor:
             from app.models import Visitor
-            visitor = Visitor(name=data["visitor_name"].strip(), phone=data["visitor_phone"].strip())
+            visitor = Visitor(society_id=society_id, name=data["visitor_name"].strip(), phone=data["visitor_phone"].strip())
             self.visitor_repo.save(visitor)
 
         freq_pass = FrequentPass(
+            society_id    = society_id,
             flat_user_id  = flat_user_id,
             visitor_id    = visitor.id,
             name          = data["name"].strip(),

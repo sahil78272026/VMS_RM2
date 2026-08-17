@@ -4,13 +4,13 @@ from app.database import SessionLocal
 from app.services.society_service import SocietyService
 
 db = SessionLocal()
-service = SocietyService(db)
 try:
-    data = {"flat_numbers": ["A-101", "A-102"]}
-    res = service.batch_create_flats(1, data)
-    print("SUCCESS", res)
-except Exception as e:
-    import traceback
-    traceback.print_exc()
+    svc = SocietyService(db)
+    flats = svc.batch_create_flats(2, {
+        "flat_numbers": ["1A", "1B", "1C", "2A", "2B", "2C"],
+        "count": 10
+    })
+    print(f"Created {len(flats)} flats")
+    db.rollback()
 finally:
     db.close()

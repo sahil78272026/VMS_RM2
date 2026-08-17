@@ -71,10 +71,21 @@ def compare_schemas(prod_url, test_url):
 if __name__ == "__main__":
     from dotenv import dotenv_values
     
-    prod_env = dotenv_values(".env.prod")
-    test_env = dotenv_values(".env")
+    # Path to backend directory
+    backend_dir = os.path.join(os.path.dirname(__file__), "..", "..", "backend")
+    
+    prod_env = dotenv_values(os.path.join(backend_dir, ".env.prod"))
+    test_env = dotenv_values(os.path.join(backend_dir, ".env"))
     
     prod_url = prod_env.get("DATABASE_URL")
     test_url = test_env.get("DATABASE_URL")
     
+    if not prod_url:
+        print("Error: PROD DATABASE_URL not found in .env.prod")
+        exit(1)
+        
+    if not test_url:
+        print("Error: TEST DATABASE_URL not found in .env")
+        exit(1)
+        
     compare_schemas(prod_url, test_url)

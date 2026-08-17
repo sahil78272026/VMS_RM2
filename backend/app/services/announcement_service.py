@@ -32,6 +32,7 @@ class AnnouncementService:
             raise ValidationError(errors)
 
         announcement = Announcement(
+            society_id     = data.get("society_id", 1),
             created_by     = user_id,
             title          = data["title"].strip(),
             body           = data["body"].strip(),

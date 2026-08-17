@@ -71,8 +71,30 @@ class MaintenanceService:
         q = q.order_by(numeric_part.asc(), suffix_part.asc())
         
         paginated = self.flat_repo.paginate(page=page, per_page=per_page, query=q)
+        
+        items = []
+        from app.models import FlatUser
+        for f in paginated["items"]:
+            f_dict = f.to_dict()
+            active_fus = self.db.query(FlatUser).filter(
+                FlatUser.flat_id == f.id,
+                FlatUser.move_out_date.is_(None)
+            ).all()
+            
+            residents = []
+            for fu in active_fus:
+                if fu.user:
+                    residents.append({
+                        "id": fu.user.id,
+                        "name": fu.user.name,
+                        "phone": fu.user.phone,
+                        "role": fu.role
+                    })
+            f_dict["residents"] = residents
+            items.append(f_dict)
+            
         return {
-            "items": [f.to_dict() for f in paginated["items"]],
+            "items": items,
             "total": paginated["meta"]["total"],
             "page": paginated["meta"]["page"],
             "pages": paginated["meta"]["pages"]

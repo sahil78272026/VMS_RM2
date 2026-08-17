@@ -26,6 +26,8 @@ class Society(Base):
     total_flats = Column(Integer, nullable=True)
     logo_url    = Column(String(500), nullable=True)
     status      = Column(Enum("trial", "active", "suspended", name="society_status"), default="active", nullable=False)
+    subscription_plan     = Column(Enum("basic", "premium", "enterprise", name="subscription_plan_type"), default="basic", nullable=False)
+    subscription_end_date = Column(DateTime, nullable=True)
     created_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
@@ -45,6 +47,8 @@ class Society(Base):
     flat_users           = relationship("FlatUser", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
     society_admins       = relationship("SocietyAdmin", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
     amenities            = relationship("Amenity", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    security_agencies    = relationship("SecurityAgency", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
+    parking_violations   = relationship("ParkingViolation", back_populates="society", cascade="all, delete-orphan", lazy="dynamic")
 
     def to_dict(self):
         return {
@@ -56,6 +60,8 @@ class Society(Base):
             "total_flats": self.total_flats,
             "logo_url":    self.logo_url,
             "status":      self.status,
+            "subscription_plan": self.subscription_plan,
+            "subscription_end_date": self.subscription_end_date.isoformat() if self.subscription_end_date else None,
             "created_at":  self.created_at.isoformat(),
         }
 
@@ -66,6 +72,7 @@ class SocietyAdmin(Base):
     id         = Column(Integer, primary_key=True)
     society_id = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False)
     user_id    = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    admin_role = Column(String(50), default="regular", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     __table_args__ = (
@@ -80,8 +87,10 @@ class SocietyAdmin(Base):
             "id":         self.id,
             "society_id": self.society_id,
             "user_id":    self.user_id,
+            "admin_role": self.admin_role,
             "created_at": self.created_at.isoformat(),
             "society":    self.society.to_dict() if self.society else None,
+            "user":       self.user.to_dict() if self.user else None,
         }
 
 
@@ -127,6 +136,7 @@ class Flat(Base):
     society_id  = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     flat_number = Column(String(20), nullable=False)
     status      = Column(Enum("occupied", "vacant", name="flat_status"), default="vacant", nullable=False)
+    allow_guard_force_entry = Column(Boolean, default=False, nullable=False)
     maintenance_valid_until = Column(Date, nullable=True)
 
     __table_args__ = (
@@ -147,6 +157,7 @@ class Flat(Base):
             "society_id":  self.society_id,
             "flat_number": self.flat_number,
             "status":      self.status,
+            "allow_guard_force_entry": self.allow_guard_force_entry,
             "maintenance_valid_until": self.maintenance_valid_until.isoformat() if self.maintenance_valid_until else None,
         }
 
@@ -169,7 +180,7 @@ class User(Base):
     move_in_date   = Column(Date, nullable=True)
     created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_login     = Column(DateTime, nullable=True)
-
+    notifications_muted = Column(Boolean, default=False, nullable=False)
     # Relationships
     society_admins       = relationship("SocietyAdmin",       back_populates="user",    lazy="dynamic")
     flat_user            = relationship("FlatUser",           back_populates="user",    uselist=False)
@@ -186,27 +197,33 @@ class User(Base):
         societies_info = []
         if self.flat_user and self.flat_user.society:
             societies_info.append({
+                "id": f"{self.flat_user.society_id}_resident",
                 "society_id": self.flat_user.society_id,
                 "society_name": self.flat_user.society.name,
                 "society_slug": self.flat_user.society.slug,
+                "society_status": self.flat_user.society.status,
                 "role": "resident",
                 "flat_id": self.flat_user.flat_id,
                 "flat_number": self.flat_user.flat.flat_number if self.flat_user.flat else None,
             })
         if self.guard and self.guard.society:
             societies_info.append({
+                "id": f"{self.guard.society_id}_guard",
                 "society_id": self.guard.society_id,
                 "society_name": self.guard.society.name,
                 "society_slug": self.guard.society.slug,
+                "society_status": self.guard.society.status,
                 "role": "guard",
                 "employee_id": self.guard.employee_id,
             })
         for sa in self.society_admins:
             if sa.society:
                 societies_info.append({
+                    "id": f"{sa.society_id}_admin",
                     "society_id": sa.society_id,
                     "society_name": sa.society.name,
                     "society_slug": sa.society.slug,
+                    "society_status": sa.society.status,
                     "role": "admin",
                 })
 
@@ -223,6 +240,7 @@ class User(Base):
             "move_in_date":   self.move_in_date.isoformat() if self.move_in_date else None,
             "created_at":     self.created_at.isoformat(),
             "last_login":     self.last_login.isoformat() if self.last_login else None,
+            "notifications_muted": self.notifications_muted,
             "societies":      societies_info,
         }
         return data
@@ -282,8 +300,10 @@ class Guard(Base):
     id          = Column(Integer, primary_key=True)
     society_id  = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     user_id     = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
-    employee_id = Column(String(50), nullable=False)
-    shift       = Column(Enum("morning", "night", name="guard_shift"), nullable=False)
+    employee_id    = Column(String(50), nullable=False)
+    shift          = Column(Enum("morning", "night", name="guard_shift"), nullable=False)
+    shift_pin_hash = Column(String(255), nullable=True)
+    agency_id      = Column(Integer, ForeignKey("security_agencies.id", ondelete="SET NULL"), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("society_id", "employee_id", name="uq_guard_society_employee"),
@@ -294,6 +314,8 @@ class Guard(Base):
     user          = relationship("User",         back_populates="guard")
     gate_sessions = relationship("GateSession",  back_populates="guard", lazy="dynamic")
     visitor_logs  = relationship("VisitorLog",   back_populates="registered_by_guard_rel", lazy="dynamic")
+    agency        = relationship("SecurityAgency", back_populates="guards")
+    parking_violations = relationship("ParkingViolation", back_populates="guard", lazy="dynamic")
 
     def to_dict(self):
         return {
@@ -302,7 +324,9 @@ class Guard(Base):
             "user_id":     self.user_id,
             "employee_id": self.employee_id,
             "shift":       self.shift,
+            "agency_id":   self.agency_id,
             "user":        self.user.to_dict() if self.user else None,
+            "agency":      self.agency.to_dict() if self.agency else None,
         }
 
 
@@ -365,6 +389,7 @@ class VisitorLog(Base):
     vehicle_number        = Column(String(20), nullable=True)
     entered_at            = Column(DateTime, nullable=True)
     registered_by_guard   = Column(Integer, ForeignKey("guards.id"), nullable=True)
+    guard_name            = Column(String(100), nullable=True)
 
     # Approval
     approval_source       = Column(Enum("guard_initiated", "self_checkin", name="approval_source"), nullable=False)
@@ -392,6 +417,9 @@ class VisitorLog(Base):
     visitor_count         = Column(Integer, default=1, nullable=False)
     created_at            = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    is_force_approved     = Column(Boolean, default=False, nullable=False)
+    force_approve_reason  = Column(String(200), nullable=True)
+
     # Relationships
     society                    = relationship("Society",   back_populates="visitor_logs")
     visitor                    = relationship("Visitor",   back_populates="visitor_logs")
@@ -417,9 +445,11 @@ class VisitorLog(Base):
             "vehicle_number":        self.vehicle_number,
             "entered_at":            self.entered_at.isoformat() if self.entered_at else None,
             "registered_by_guard":   self.registered_by_guard,
+            "guard_name":            self.guard_name,
             "approval_source":       self.approval_source,
             "approval_status":       self.approval_status,
             "approved_by":           self.approved_by,
+            "approver_name":         self.approved_by_flat_user.user.name if self.approved_by_flat_user and self.approved_by_flat_user.user else None,
             "approved_at":           self.approved_at.isoformat() if self.approved_at else None,
             "purpose":               self.purpose,
             "stay_duration":         self.stay_duration,
@@ -431,9 +461,13 @@ class VisitorLog(Base):
             "status":                self.status,
             "notes":                 self.notes,
             "visitor_count":         self.visitor_count,
+            "is_force_approved":     self.is_force_approved,
+            "force_approve_reason":  self.force_approve_reason,
             "created_at":            self.created_at.isoformat(),
             "visitor":               self.visitor.to_dict() if self.visitor else None,
             "flat":                  self.flat.to_dict() if self.flat else None,
+            "flat_user":             self.flat_user.to_dict() if self.flat_user else None,
+            "entry_gate":            self.entry_gate.to_dict() if self.entry_gate else None,
         }
 
 
@@ -593,6 +627,7 @@ class GateSession(Base):
     id          = Column(Integer, primary_key=True)
     society_id  = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, default=1)
     guard_id    = Column(Integer, ForeignKey("guards.id"), nullable=False)
+    guard_name  = Column(String(100), nullable=True)
     gate_id     = Column(Integer, ForeignKey("gates.id"),  nullable=False)
     shift_start = Column(DateTime, default=datetime.utcnow, nullable=False)
     shift_end   = Column(DateTime, nullable=True)
@@ -607,6 +642,7 @@ class GateSession(Base):
             "id":          self.id,
             "society_id":  self.society_id,
             "guard_id":    self.guard_id,
+            "guard_name":  self.guard_name,
             "gate_id":     self.gate_id,
             "shift_start": self.shift_start.isoformat(),
             "shift_end":   self.shift_end.isoformat() if self.shift_end else None,
@@ -802,4 +838,136 @@ class Amenity(Base):
             "timing": self.timing,
             "status": self.status,
             "created_at": self.created_at.isoformat()
+        }
+
+# ── 17. Security Agencies ──────────────────────────────────────────────────
+
+class SecurityAgency(Base):
+    __tablename__ = "security_agencies"
+
+    id             = Column(Integer, primary_key=True)
+    society_id     = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False)
+    name           = Column(String(150), nullable=False)
+    contact_person = Column(String(100), nullable=True)
+    contact_number = Column(String(20), nullable=True)
+    email          = Column(String(100), nullable=True)
+    contract_start = Column(Date, nullable=True)
+    contract_end   = Column(Date, nullable=True)
+    status         = Column(Enum("active", "inactive", name="agency_status"), default="active", nullable=False)
+    created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    society        = relationship("Society", back_populates="security_agencies")
+    guards         = relationship("Guard", back_populates="agency", lazy="dynamic")
+
+    def to_dict(self):
+        return {
+            "id":             self.id,
+            "society_id":     self.society_id,
+            "name":           self.name,
+            "contact_person": self.contact_person,
+            "contact_number": self.contact_number,
+            "email":          self.email,
+            "contract_start": self.contract_start.isoformat() if self.contract_start else None,
+            "contract_end":   self.contract_end.isoformat() if self.contract_end else None,
+            "status":         self.status,
+            "created_at":     self.created_at.isoformat(),
+        }
+
+# ── 18. Parking Violations ─────────────────────────────────────────────────
+
+class ParkingViolation(Base):
+    __tablename__ = "parking_violations"
+
+    id             = Column(Integer, primary_key=True)
+    society_id     = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False)
+    reported_by    = Column(Integer, ForeignKey("guards.id"), nullable=False)
+    vehicle_number = Column(String(20), nullable=False)
+    violation_type = Column(Enum("unauthorized_parking", "overstay", "wrong_parking", name="violation_type"), nullable=False)
+    photo_url      = Column(String(500), nullable=True)
+    notes          = Column(Text, nullable=True)
+    status         = Column(Enum("open", "resolved", name="violation_status"), default="open", nullable=False)
+    created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    society        = relationship("Society", back_populates="parking_violations")
+    guard          = relationship("Guard", back_populates="parking_violations")
+
+    def to_dict(self):
+        return {
+            "id":             self.id,
+            "society_id":     self.society_id,
+            "reported_by":    self.reported_by,
+            "vehicle_number": self.vehicle_number,
+            "violation_type": self.violation_type,
+            "photo_url":      self.photo_url,
+            "notes":          self.notes,
+            "status":         self.status,
+            "created_at":     self.created_at.isoformat(),
+            "guard_name":     self.guard.user.name if self.guard and self.guard.user else None,
+        }
+
+# ── 19. Helpdesk Tickets ──────────────────────────────────────────────────
+
+class HelpdeskTicket(Base):
+    __tablename__ = "helpdesk_tickets"
+
+    id             = Column(Integer, primary_key=True)
+    society_id     = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False)
+    created_by     = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title          = Column(String(255), nullable=False)
+    description    = Column(Text, nullable=False)
+    category       = Column(String(50), default="other", nullable=False)
+    priority       = Column(String(20), default="medium", nullable=False)
+    status         = Column(String(20), default="open", nullable=False)
+    comments       = Column(Text, nullable=True)
+    created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    society        = relationship("Society")
+    creator        = relationship("User")
+
+    def to_dict(self):
+        return {
+            "id":          self.id,
+            "society_id":  self.society_id,
+            "created_by":  self.created_by,
+            "title":       self.title,
+            "description": self.description,
+            "category":    self.category,
+            "priority":    self.priority,
+            "status":      self.status,
+            "comments":    self.comments,
+            "created_at":  self.created_at.isoformat(),
+        }
+
+class SocietyDonation(Base):
+    __tablename__ = "society_donations"
+
+    id          = Column(Integer, primary_key=True)
+    society_id  = Column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id     = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    amount      = Column(Numeric(10, 2), nullable=False)
+    purpose     = Column(String(200), nullable=True)
+    utr_number  = Column(String(50), nullable=False)
+    receipt_url = Column(String(500), nullable=True)
+    status      = Column(Enum("pending", "verified", "rejected", name="society_donation_status"), default="pending", nullable=False)
+    created_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    society = relationship("Society")
+    user    = relationship("User")
+
+    def to_dict(self):
+        return {
+            "id":          self.id,
+            "society_id":  self.society_id,
+            "user_id":     self.user_id,
+            "amount":      float(self.amount),
+            "purpose":     self.purpose,
+            "utr_number":  self.utr_number,
+            "receipt_url": self.receipt_url,
+            "status":      self.status,
+            "created_at":  self.created_at.isoformat(),
+            "updated_at":  self.updated_at.isoformat(),
         }

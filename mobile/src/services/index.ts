@@ -1,4 +1,5 @@
 import api from './api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const AuthService = {
   sendOtp: (phone: string) => api.post('/auth/send-otp', { phone }),
@@ -24,6 +25,11 @@ export const SocietyService = {
   getAdmins: (id: number | string) => api.get(`/societies/${id}/admins`),
   assignAdmin: (id: number | string, d: any) => api.post(`/societies/${id}/admins`, d),
   removeAdmin: (society_id: number | string, user_id: number | string) => api.delete(`/societies/${society_id}/admins/${user_id}`),
+  suspend: (id: number | string) => api.post(`/societies/${id}/suspend`),
+  activate: (id: number | string) => api.post(`/societies/${id}/activate`),
+  delete: (id: number | string) => api.delete(`/societies/${id}`),
+  getDonations: (society_id: number | string) => api.get(`/societies/${society_id}/donations`),
+  verifyDonation: (society_id: number | string, donation_id: number | string) => api.patch(`/societies/${society_id}/donations/${donation_id}/verify`),
 };
 
 export const FlatService = {
@@ -42,6 +48,7 @@ export const FlatUserService = {
   demote: (id: string) => api.patch(`/flat-users/${id}/demote`),
   getPendingFamily: () => api.get('/flat-users/pending/family'),
   approveFamily: (userId: string, relation: string) => api.post(`/flat-users/${userId}/approve-family`, { relation }),
+  moveOut: () => api.post('/flat-users/move-out'),
 };
 
 export const GuardService = {
@@ -61,8 +68,8 @@ export const GateService = {
 };
 
 export const GateSessionService = {
-  startShift: (gate_id: string) => api.post('/gate-sessions/start', { gate_id }),
-  endShift: () => api.post('/gate-sessions/end'),
+  startShift: (gate_id: string, guard_name?: string, target_guard_id?: string, pin?: string) => api.post('/gate-sessions/start', { gate_id, guard_name, target_guard_id, pin }),
+  endShift: (target_guard_id?: string) => api.post('/gate-sessions/end', { target_guard_id }),
   getAll: (p?: any) => api.get('/gate-sessions', { params: p }),
   getActive: () => api.get('/gate-sessions/active'),
   getMy: () => api.get('/gate-sessions/my'),
@@ -85,6 +92,7 @@ export const VisitorLogService = {
   getInside: () => api.get('/visitor-logs/inside'),
   create: (d: any) => api.post('/visitor-logs', d),
   confirmEntry: (id: string, d: any) => api.patch(`/visitor-logs/${id}/entry`, d),
+  forceApprove: (id: string, reason: string) => api.patch(`/visitor-logs/${id}/force-approve`, { reason }),
   confirmExit: (id: string) => api.patch(`/visitor-logs/${id}/exit`),
   getMyLogs: (p?: any) => api.get('/visitor-logs/my', { params: p }),
   getMyPending: () => api.get('/visitor-logs/my/pending'),
@@ -120,6 +128,7 @@ export const MaintenanceService = {
   getFlats: (p?: any) => api.get('/maintenance/admin/flats', { params: p }),
   approve: (id: string) => api.post(`/maintenance/admin/approve/${id}`),
   reject: (id: string) => api.post(`/maintenance/admin/reject/${id}`),
+  offline: (d: any) => api.post('/maintenance/admin/offline', d),
 };
 
 export const AnnouncementService = {
@@ -132,9 +141,38 @@ export const AnnouncementService = {
 
 export const UserService = {
   getAll: (p?: any) => api.get('/users', { params: p }),
+  toggleNotifications: (muted: boolean) => api.patch('/users/me/notifications', { muted }),
+  toggleForceEntry: (allow: boolean) => api.patch('/users/me/force-entry', { allow_guard_force_entry: allow }),
 };
 
 export const AmenityService = {
   getAll: (p?: any) => api.get('/amenities', { params: p }),
   create: (d: any, society_id: string | number) => api.post(`/amenities?society_id=${society_id}`, d),
+  update: (id: string, d: any) => api.patch(`/amenities/${id}`, d),
+  delete: (id: string) => api.delete(`/amenities/${id}`),
+};
+
+export const HelpdeskService = {
+  getMy: (p?: any) => api.get('/helpdesk/my', { params: p }),
+  getAll: (p?: any) => api.get('/helpdesk', { params: p }),
+  create: (d: any) => api.post('/helpdesk', d),
+  update: (id: string | number, d: any) => api.patch(`/helpdesk/${id}`, d),
+};
+
+export const OCRService = {
+  scanUtr: async (d: any) => {
+    const token = await AsyncStorage.getItem('access_token');
+    const activeSocietyId = await AsyncStorage.getItem('active_society_id');
+    const res = await fetch(`${api.defaults.baseURL}/ocr/scan-utr`, {
+      method: 'POST',
+      body: d,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        ...(activeSocietyId ? { 'X-Society-ID': activeSocietyId } : {})
+      }
+    });
+    const json = await res.json();
+    if (!res.ok) throw { response: { data: json } };
+    return { data: json };
+  },
 };

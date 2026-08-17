@@ -8,7 +8,7 @@ export default function ProductLandingPage() {
           <div style={{ fontSize: '28px' }}>🏢</div>
           <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 900, color: '#0284C7', letterSpacing: '-0.5px' }}>RM2 Secure</h1>
         </div>
-        <a href="https://drive.google.com/file/d/1lLW1T3vpFsQthcmpEpbaGIOhmpkitaMH" target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#0284C7', color: '#FFFFFF', padding: '12px 24px', borderRadius: '12px', textDecoration: 'none', fontWeight: 700, transition: '0.2s', boxShadow: '0 4px 6px -1px rgba(2, 132, 199, 0.2)' }}>Download App</a>
+        <a href="https://drive.google.com/file/d/1hxaqqpm6tUORbI1P2AoHpcm4jMpt-54I/view?usp=sharing" target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#0284C7', color: '#FFFFFF', padding: '12px 24px', borderRadius: '12px', textDecoration: 'none', fontWeight: 700, transition: '0.2s', boxShadow: '0 4px 6px -1px rgba(2, 132, 199, 0.2)' }}>Download App</a>
       </header>
 
       {/* Hero */}

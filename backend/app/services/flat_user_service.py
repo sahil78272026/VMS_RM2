@@ -147,9 +147,14 @@ class FlatUserService:
         if not target:
             raise NotFoundError("Flat member")
 
-        # Resident can only update members in their own flat
-        if requester and requester.flat_id != target.flat_id:
-            raise ForbiddenError("You can only manage members of your own flat")
+        # Resident can only update members in their own flat, and must be primary to update others
+        if requester:
+            if requester.flat_id != target.flat_id:
+                raise ForbiddenError("You can only manage members of your own flat")
+            if requester.id != target.id and requester.role != "primary":
+                raise ForbiddenError("Only primary members can modify other members")
+            if requester.id == target.id and requester.role != "primary" and (data.get("can_approve") is not None or data.get("relation") == "primary"):
+                raise ForbiddenError("You cannot grant yourself primary permissions")
 
         if data.get("can_approve") is not None:
             target.can_approve = data["can_approve"]
@@ -178,11 +183,16 @@ class FlatUserService:
         if target.role == "primary":
             raise ForbiddenError("Cannot remove the primary resident via this endpoint")
 
-        if requester and requester.flat_id != target.flat_id:
-            raise ForbiddenError("You can only manage members of your own flat")
+        if requester:
+            if requester.flat_id != target.flat_id:
+                raise ForbiddenError("You can only manage members of your own flat")
+            if requester.id != target.id and requester.role != "primary":
+                raise ForbiddenError("Only primary members can remove other members")
 
-        self.repo.delete(target)
-        logger.info(f"[FLAT_USER] Member removed: flat_user {flat_user_id}")
+        target.move_out_date = __import__('datetime').date.today()
+        target.can_approve = False
+        self.repo.save(target)
+        logger.info(f"[FLAT_USER] Member moved out: flat_user {flat_user_id}")
 
     def promote_to_primary(self, requesting_user_id: int, target_flat_user_id: int):
         """

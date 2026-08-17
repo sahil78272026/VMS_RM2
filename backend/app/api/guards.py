@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.database import get_db
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_active_society_id
 from app.services.guard_service import GuardService
 from app.utils.response import success, error
 from app.utils.exceptions import AppException
@@ -79,7 +79,12 @@ async def get_guard(guard_id: int, request: Request, db: Session = Depends(get_d
 
 
 @router.post("")
-async def create_guard(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+async def create_guard(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+    society_id: int = Depends(get_active_society_id)
+):
     """
     Admin: create a new guard account.
     Creates a user record with role=guard and a guard profile.
@@ -87,9 +92,7 @@ async def create_guard(request: Request, db: Session = Depends(get_db), current_
     try:
         guard_service = GuardService(db)
         data  = await request.json()
-        header_society_id = request.headers.get("X-Society-ID")
-        if "society_id" not in data and header_society_id and header_society_id.isdigit():
-            data["society_id"] = int(header_society_id)
+        data["society_id"] = society_id
         guard = guard_service.create(data)
         return success("Guard account created", data=guard.to_dict(), status_code=201)
     except AppException as e:
