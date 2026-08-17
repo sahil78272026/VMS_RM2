@@ -40,26 +40,22 @@ export const AuthProvider = ({ children }: any) => {
     const res  = await AuthService.login({ phone, password, expo_push_token: null, society_id: requested_society_id });
     const data = res.data.data;
 
-    await AsyncStorage.setItem('access_token',      data.access_token);
-    await AsyncStorage.setItem('refresh_token',     data.refresh_token);
-    await AsyncStorage.setItem('user',              JSON.stringify(data.user));
-    const userSocieties = data.user.societies || [];
-    let newProfileId = null;
-    if (data.active_society_id) {
-      await AsyncStorage.setItem('active_society_id', String(data.active_society_id));
-      const matchingProfile = userSocieties.find((s: any) => s.society_id === data.active_society_id);
-      if (matchingProfile) newProfileId = matchingProfile.id;
-    } else {
-      await AsyncStorage.removeItem('active_society_id');
-    }
+    const userSocieties = data.user?.societies || [];
+    const newProfileId = userSocieties?.[0]?.id ?? null;
+
+    const promises = [
+      AsyncStorage.setItem('access_token', data.access_token),
+      AsyncStorage.setItem('refresh_token', data.refresh_token),
+      AsyncStorage.setItem('user', JSON.stringify(data.user))
+    ];
+    if (data.active_society_id) promises.push(AsyncStorage.setItem('active_society_id', String(data.active_society_id)));
+    else promises.push(AsyncStorage.removeItem('active_society_id'));
+    if (newProfileId) promises.push(AsyncStorage.setItem('active_profile_id', newProfileId));
+    else promises.push(AsyncStorage.removeItem('active_profile_id'));
+    await Promise.all(promises);
     
-    if (newProfileId) {
-      await AsyncStorage.setItem('active_profile_id', newProfileId);
-      setActiveProfileId(newProfileId);
-    } else {
-      await AsyncStorage.removeItem('active_profile_id');
-      setActiveProfileId(null);
-    }
+    if (newProfileId) setActiveProfileId(newProfileId);
+    else setActiveProfileId(null);
 
     setUser(data.user);
     setSocieties(userSocieties);
@@ -73,27 +69,22 @@ export const AuthProvider = ({ children }: any) => {
     });
     const data = res.data.data;
 
-    await AsyncStorage.setItem('access_token',      data.access_token);
-    await AsyncStorage.setItem('refresh_token',     data.refresh_token);
-    await AsyncStorage.setItem('user',              JSON.stringify(data.user));
+    const userSocieties = data.user?.societies || [];
+    const newProfileId = userSocieties?.[0]?.id ?? null;
 
-    const userSocieties = data.user.societies || [];
-    let newProfileId = null;
-    if (data.active_society_id) {
-      await AsyncStorage.setItem('active_society_id', String(data.active_society_id));
-      const matchingProfile = userSocieties.find((s: any) => s.society_id === data.active_society_id);
-      if (matchingProfile) newProfileId = matchingProfile.id;
-    } else {
-      await AsyncStorage.removeItem('active_society_id');
-    }
-    
-    if (newProfileId) {
-      await AsyncStorage.setItem('active_profile_id', newProfileId);
-      setActiveProfileId(newProfileId);
-    } else {
-      await AsyncStorage.removeItem('active_profile_id');
-      setActiveProfileId(null);
-    }
+    const promises = [
+      AsyncStorage.setItem('access_token', data.access_token),
+      AsyncStorage.setItem('refresh_token', data.refresh_token),
+      AsyncStorage.setItem('user', JSON.stringify(data.user))
+    ];
+    if (data.active_society_id) promises.push(AsyncStorage.setItem('active_society_id', String(data.active_society_id)));
+    else promises.push(AsyncStorage.removeItem('active_society_id'));
+    if (newProfileId) promises.push(AsyncStorage.setItem('active_profile_id', newProfileId));
+    else promises.push(AsyncStorage.removeItem('active_profile_id'));
+    await Promise.all(promises);
+
+    if (newProfileId) setActiveProfileId(newProfileId);
+    else setActiveProfileId(null);
 
     setUser(data.user);
     setSocieties(userSocieties);
@@ -109,11 +100,13 @@ export const AuthProvider = ({ children }: any) => {
       const res = await AuthService.switchSociety(targetSocietyId);
       const data = res.data.data;
 
-      await AsyncStorage.setItem('access_token',      data.access_token);
-      await AsyncStorage.setItem('refresh_token',     data.refresh_token);
-      await AsyncStorage.setItem('user',              JSON.stringify(data.user));
-      await AsyncStorage.setItem('active_society_id', String(data.active_society_id));
-      await AsyncStorage.setItem('active_profile_id', profileId);
+      await Promise.all([
+        AsyncStorage.setItem('access_token', data.access_token),
+        AsyncStorage.setItem('refresh_token', data.refresh_token),
+        AsyncStorage.setItem('user', JSON.stringify(data.user)),
+        AsyncStorage.setItem('active_society_id', String(data.active_society_id)),
+        AsyncStorage.setItem('active_profile_id', profileId)
+      ]);
 
       setUser(data.user);
       setActiveProfileId(profileId);
@@ -138,27 +131,22 @@ export const AuthProvider = ({ children }: any) => {
       return data;
     }
 
-    await AsyncStorage.setItem('access_token',      data.access_token);
-    await AsyncStorage.setItem('refresh_token',     data.refresh_token);
-    await AsyncStorage.setItem('user',              JSON.stringify(data.user));
-    
-    const userSocieties = data.user.societies || [];
-    let newProfileId = null;
-    if (data.active_society_id) {
-      await AsyncStorage.setItem('active_society_id', String(data.active_society_id));
-      const matchingProfile = userSocieties.find((s: any) => s.society_id === data.active_society_id);
-      if (matchingProfile) newProfileId = matchingProfile.id;
-    } else {
-      await AsyncStorage.removeItem('active_society_id');
-    }
+    const userSocieties = data.user?.societies || [];
+    const newProfileId = userSocieties?.[0]?.id ?? null;
 
-    if (newProfileId) {
-      await AsyncStorage.setItem('active_profile_id', newProfileId);
-      setActiveProfileId(newProfileId);
-    } else {
-      await AsyncStorage.removeItem('active_profile_id');
-      setActiveProfileId(null);
-    }
+    const promises = [
+      AsyncStorage.setItem('access_token', data.access_token),
+      AsyncStorage.setItem('refresh_token', data.refresh_token),
+      AsyncStorage.setItem('user', JSON.stringify(data.user))
+    ];
+    if (data.active_society_id) promises.push(AsyncStorage.setItem('active_society_id', String(data.active_society_id)));
+    else promises.push(AsyncStorage.removeItem('active_society_id'));
+    if (newProfileId) promises.push(AsyncStorage.setItem('active_profile_id', newProfileId));
+    else promises.push(AsyncStorage.removeItem('active_profile_id'));
+    await Promise.all(promises);
+
+    if (newProfileId) setActiveProfileId(newProfileId);
+    else setActiveProfileId(null);
 
     setUser(data.user);
     setSocieties(userSocieties);
@@ -170,27 +158,22 @@ export const AuthProvider = ({ children }: any) => {
     const data = res.data.data;
 
     if (data.access_token) {
-      await AsyncStorage.setItem('access_token',      data.access_token);
-      await AsyncStorage.setItem('refresh_token',     data.refresh_token);
-      await AsyncStorage.setItem('user',              JSON.stringify(data.user));
-      
-      const userSocieties = data.user.societies || [];
-      let newProfileId = null;
-      if (data.active_society_id) {
-        await AsyncStorage.setItem('active_society_id', String(data.active_society_id));
-        const matchingProfile = userSocieties.find((s: any) => s.society_id === data.active_society_id);
-        if (matchingProfile) newProfileId = matchingProfile.id;
-      } else {
-        await AsyncStorage.removeItem('active_society_id');
-      }
+      const userSocieties = data.user?.societies || [];
+      const newProfileId = userSocieties?.[0]?.id ?? null;
 
-      if (newProfileId) {
-        await AsyncStorage.setItem('active_profile_id', newProfileId);
-        setActiveProfileId(newProfileId);
-      } else {
-        await AsyncStorage.removeItem('active_profile_id');
-        setActiveProfileId(null);
-      }
+      const promises = [
+        AsyncStorage.setItem('access_token', data.access_token),
+        AsyncStorage.setItem('refresh_token', data.refresh_token),
+        AsyncStorage.setItem('user', JSON.stringify(data.user))
+      ];
+      if (data.active_society_id) promises.push(AsyncStorage.setItem('active_society_id', String(data.active_society_id)));
+      else promises.push(AsyncStorage.removeItem('active_society_id'));
+      if (newProfileId) promises.push(AsyncStorage.setItem('active_profile_id', newProfileId));
+      else promises.push(AsyncStorage.removeItem('active_profile_id'));
+      await Promise.all(promises);
+
+      if (newProfileId) setActiveProfileId(newProfileId);
+      else setActiveProfileId(null);
       
       setUser(data.user);
       setSocieties(userSocieties);

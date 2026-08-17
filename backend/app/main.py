@@ -92,6 +92,12 @@ def create_app() -> FastAPI:
     from app.api.users import router as users_router
     from app.api.sse import router as sse_router
     from app.api.amenities import router as amenities_router
+    from app.api.helpdesk import router as helpdesk_router
+    from app.api.security import router as security_router
+    from app.api.security_agencies import router as security_agencies_router
+    from app.api.parking_violations import router as parking_violations_router
+
+    from app.api.ocr import router as ocr_router
 
     app.include_router(auth_router)
     app.include_router(societies_router)
@@ -113,6 +119,11 @@ def create_app() -> FastAPI:
     app.include_router(users_router)
     app.include_router(sse_router)
     app.include_router(amenities_router)
+    app.include_router(helpdesk_router)
+    app.include_router(security_router)
+    app.include_router(security_agencies_router)
+    app.include_router(parking_violations_router)
+    app.include_router(ocr_router)
 
 
 

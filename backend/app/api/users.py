@@ -82,3 +82,19 @@ async def toggle_notifications(
         return success("Notification settings updated", data={"notifications_muted": current_user.notifications_muted})
     except Exception as e:
         return error("Failed to update notification settings", "SERVER_ERROR", str(e), 500)
+
+@router.patch("/me/force-entry")
+async def toggle_force_entry(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Toggle allow guard force entry for the current user."""
+    try:
+        data = await request.json()
+        allow = data.get("allow_guard_force_entry", False)
+        current_user.allow_guard_force_entry = allow
+        db.commit()
+        return success("Force entry settings updated", data={"allow_guard_force_entry": current_user.allow_guard_force_entry})
+    except Exception as e:
+        return error("Failed to update force entry settings", "SERVER_ERROR", str(e), 500)

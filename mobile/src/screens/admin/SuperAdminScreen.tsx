@@ -126,7 +126,7 @@ export function SuperAdminScreen() {
   const [societyAdmins, setSocietyAdmins] = useState<any[]>([]);
   const [loadingOverview, setLoadingOverview] = useState<boolean>(false);
   const [showAddAdmin, setShowAddAdmin] = useState<boolean>(false);
-  const [adminForm, setAdminForm] = useState({ name: '', phone: '', email: '', flat_id: '' });
+  const [adminForm, setAdminForm] = useState({ name: '', phone: '', email: '', flat_id: '', admin_role: 'regular' });
   const [societyFlats, setSocietyFlats] = useState<any[]>([]);
   const [submittingAdmin, setSubmittingAdmin] = useState(false);
   const [generatingFlats, setGeneratingFlats] = useState(false);
@@ -134,6 +134,7 @@ export function SuperAdminScreen() {
   const [showDeletePrompt, setShowDeletePrompt] = useState(false);
   const [showSuspendPrompt, setShowSuspendPrompt] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [societyTab, setSocietyTab] = useState<'active' | 'suspended'>('active');
   const [showFlatsList, setShowFlatsList] = useState(false);
 
   // New Society Form
@@ -291,7 +292,7 @@ export function SuperAdminScreen() {
     setShowSuspendPrompt(false);
     setShowDeletePrompt(false);
     setShowFlatsList(false);
-    setAdminForm({ name: '', phone: '', email: '', flat_id: '' });
+    setAdminForm({ name: '', phone: '', email: '', flat_id: '', admin_role: 'regular' });
 
     try {
       const [resStats, resAdmins, resFlats] = await Promise.all([
@@ -302,7 +303,7 @@ export function SuperAdminScreen() {
       setSocStats(resStats.data?.data || null);
       setSocietyAdmins(resAdmins.data?.data || []);
       const frFlats = resFlats.data?.data?.items || resFlats.data?.data || [];
-      frFlats.sort((a: any, b: any) => a.flat_number.localeCompare(b.flat_number, undefined, { numeric: true, sensitivity: 'base' }));
+      frFlats.sort((a: any, b: any) => a.flat_number.replace(/\d+/g, (n: any) => n.padStart(5, '0')).localeCompare(b.flat_number.replace(/\d+/g, (n: any) => n.padStart(5, '0'))));
       setSocietyFlats(frFlats);
     } catch (err) {
       console.error('Failed to load society overview stats', err);
@@ -326,13 +327,15 @@ export function SuperAdminScreen() {
         name: adminForm.name.trim(),
         phone: adminForm.phone.trim(),
         email: adminForm.email.trim() || undefined,
+        admin_role: adminForm.admin_role,
         flat_id: adminForm.flat_id ? parseInt(adminForm.flat_id) : undefined,
       });
       Toast.show({ type: 'success', text1: 'Success', text2: `Admin ${adminForm.name} assigned! They can now log in via OTP.` });
-      setAdminForm({ name: '', phone: '', email: '', flat_id: '' });
+      setAdminForm({ name: '', phone: '', email: '', flat_id: '', admin_role: 'regular' });
       setShowAddAdmin(false);
       const res = await SocietyService.getAdmins(selectedSoc.id);
       setSocietyAdmins(res.data?.data || []);
+      load();
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to assign admin' });
     } finally {
@@ -352,6 +355,7 @@ export function SuperAdminScreen() {
             await SocietyService.removeAdmin(selectedSoc.id, userId);
             const res = await SocietyService.getAdmins(selectedSoc.id);
             setSocietyAdmins(res.data?.data || []);
+            load();
           } catch (err: any) {
             Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to remove admin' });
           }
@@ -398,8 +402,23 @@ export function SuperAdminScreen() {
         />
       </View>
 
+      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: T.border }}>
+        <TouchableOpacity 
+          onPress={() => setSocietyTab('active')}
+          style={{ flex: 1, paddingVertical: 10, backgroundColor: societyTab === 'active' ? T.surface : 'transparent', borderRadius: 8, alignItems: 'center', borderColor: societyTab === 'active' ? T.border : 'transparent', borderWidth: 1 }}
+        >
+          <Text style={{ fontWeight: '700', color: societyTab === 'active' ? T.text : T.muted }}>Active ({societies.filter(s => s.status === 'active' || !s.status).length})</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          onPress={() => setSocietyTab('suspended')}
+          style={{ flex: 1, paddingVertical: 10, backgroundColor: societyTab === 'suspended' ? T.surface : 'transparent', borderRadius: 8, alignItems: 'center', borderColor: societyTab === 'suspended' ? T.border : 'transparent', borderWidth: 1 }}
+        >
+          <Text style={{ fontWeight: '700', color: societyTab === 'suspended' ? T.text : T.muted }}>Suspended ({societies.filter(s => s.status === 'suspended').length})</Text>
+        </TouchableOpacity>
+      </View>
+
       <Text style={{ fontSize: 13, fontWeight: '700', color: T.dim, textTransform: 'uppercase', marginBottom: 10, letterSpacing: 0.5 }}>
-        Communities ({societies.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).length})
+        Communities ({societies.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()) && (societyTab === 'active' ? s.status !== 'suspended' : s.status === 'suspended')).length})
       </Text>
 
       {societies.length === 0 && (
@@ -407,7 +426,7 @@ export function SuperAdminScreen() {
       )}
 
       {/* ── Clean Society Cards ───────────────────────────────────────────── */}
-      {societies.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).map((s) => (
+      {societies.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()) && (societyTab === 'active' ? s.status !== 'suspended' : s.status === 'suspended')).map((s) => (
         <Card
           key={s.id}
           onClick={() => openSocietyOverview(s)}
@@ -615,6 +634,15 @@ export function SuperAdminScreen() {
                     placeholder="e.g. rajesh@society.com"
                     value={adminForm.email}
                     onChange={(v: string) => setAdminForm({ ...adminForm, email: v })}
+                  />
+                  <Select
+                    label="Admin Role *"
+                    options={[
+                      { label: 'Regular Admin', value: 'regular' },
+                      { label: 'Cashier (Payment Approver)', value: 'cashier' },
+                    ]}
+                    value={adminForm.admin_role}
+                    onChange={(v: string) => setAdminForm({ ...adminForm, admin_role: v })}
                   />
                   {societyFlats.length > 0 && (
                     <Select

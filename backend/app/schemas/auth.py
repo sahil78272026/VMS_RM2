@@ -9,6 +9,7 @@ class RegisterResidentRequest(BaseModel):
     flat_id: int
     society_id: Optional[int] = None
     move_in_date: Optional[str] = None
+    is_owner: bool = False
 
 class LoginRequest(BaseModel):
     phone: str

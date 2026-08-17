@@ -9,6 +9,7 @@ from app.repositories import FlatUserRepository
 from app.utils.response import success, error
 from app.utils.security import JWT_SECRET_KEY, ALGORITHM
 import jwt
+from app.utils.exceptions import AppException
 
 router = APIRouter(prefix="/api/v1/maintenance", tags=["maintenance"])
 
@@ -158,3 +159,36 @@ async def admin_reject(
         return error(e.message, e.code, e.details, e.status_code)
     except Exception as e:
         return error("Failed to reject payment", "SERVER_ERROR", str(e), 500)
+
+
+@router.post("/admin/offline")
+async def admin_offline_payment(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Admin: Mark flat maintenance as paid offline."""
+    try:
+        header_society_id = request.headers.get("X-Society-ID")
+        target_society_id = int(header_society_id) if header_society_id and header_society_id.isdigit() else None
+        
+        data = await request.json()
+        flat_id = data.get("flat_id")
+        amount = data.get("amount")
+        months_added = data.get("months_added", 1)
+        utr_number = data.get("utr_number", "OFFLINE")
+        
+        maintenance_service = MaintenanceService(db)
+        # We can submit payment on behalf of current user (admin) and auto approve it.
+        payment = maintenance_service.submit_payment(flat_id, current_user.id, {
+            "amount": amount,
+            "months_added": months_added,
+            "utr_number": utr_number,
+        })
+        
+        approved_payment = maintenance_service.admin_approve_payment(payment.id, society_id=target_society_id)
+        return success("Offline payment recorded and approved", data=approved_payment.to_dict())
+    except AppException as e:
+        return error(e.message, e.code, e.details, e.status_code)
+    except Exception as e:
+        return error("Failed to record offline payment", "SERVER_ERROR", str(e), 500)

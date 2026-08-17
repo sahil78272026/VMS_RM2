@@ -117,7 +117,8 @@ async def get_active_sessions(request: Request, db: Session = Depends(get_db), c
     try:
         guard_repo = GuardRepository(db)
         session_service = GateSessionService(db)
-        sessions = session_service.get_active()
+        society_id = request.headers.get("X-Society-ID")
+        sessions = session_service.get_active(society_id=society_id)
         return success("Active sessions fetched", data=[s.to_dict() for s in sessions])
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)

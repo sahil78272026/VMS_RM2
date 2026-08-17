@@ -7,6 +7,7 @@ Includes multi-tenancy scoping by society_id across all tenant models.
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 from app.repositories.base import BaseRepository
 from app.models import (
     Society, SocietyAdmin, User, Flat, FlatUser, Guard, Visitor, VisitorLog,
@@ -69,7 +70,7 @@ class SocietyAdminRepository(BaseRepository):
         return self.db.query(SocietyAdmin).filter_by(society_id=society_id, user_id=user_id).first()
 
     def get_admins_by_society(self, society_id: int) -> List[SocietyAdmin]:
-        return self.db.query(SocietyAdmin).filter_by(society_id=society_id).all()
+        return self.db.query(SocietyAdmin).options(joinedload(SocietyAdmin.user)).filter_by(society_id=society_id).all()
 
     def is_admin(self, society_id: int, user_id: int) -> bool:
         return self.db.query(SocietyAdmin).filter_by(society_id=society_id, user_id=user_id).first() is not None
@@ -371,11 +372,11 @@ class VisitorLogRepository(BaseRepository):
         )
         return self.paginate(page=page, per_page=per_page, query=q)
 
-    def get_today_for_gate(self, gate_id: int) -> List[VisitorLog]:
+    def get_today_for_society(self, society_id: int) -> List[VisitorLog]:
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         return self.db.query(VisitorLog).filter(
-            VisitorLog.entry_gate_id == gate_id,
-            VisitorLog.created_at >= today_start
+            VisitorLog.society_id == society_id,
+            (VisitorLog.created_at >= today_start) | (VisitorLog.actual_exit_at >= today_start) | (VisitorLog.entered_at >= today_start)
         ).order_by(VisitorLog.created_at.desc()).all()
 
     def get_all_filtered(self, filters: dict, page: int = 1, per_page: int = 20, society_id: int = None):

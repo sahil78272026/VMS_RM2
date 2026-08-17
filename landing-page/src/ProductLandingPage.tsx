@@ -8,7 +8,7 @@ export default function ProductLandingPage() {
           <div style={{ fontSize: '28px' }}>🏢</div>
           <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 900, color: '#0284C7', letterSpacing: '-0.5px' }}>RM2 Secure</h1>
         </div>
-        <a href="https://drive.google.com/uc?export=download&id=1VFvgeK5n8dokryaiy_DHZqFl5FbxUnVF" target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#0284C7', color: '#FFFFFF', padding: '12px 24px', borderRadius: '12px', textDecoration: 'none', fontWeight: 700, transition: '0.2s', boxShadow: '0 4px 6px -1px rgba(2, 132, 199, 0.2)' }}>Download App</a>
+        <a href="https://drive.google.com/file/d/1hxaqqpm6tUORbI1P2AoHpcm4jMpt-54I/view?usp=sharing" target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#0284C7', color: '#FFFFFF', padding: '12px 24px', borderRadius: '12px', textDecoration: 'none', fontWeight: 700, transition: '0.2s', boxShadow: '0 4px 6px -1px rgba(2, 132, 199, 0.2)' }}>Download App</a>
       </header>
 
       {/* Hero */}
@@ -24,7 +24,7 @@ export default function ProductLandingPage() {
             Seamless QR check-ins, multi-tenant architecture, robust guard terminals, and a unified resident directory. Upgrade your community's security experience today.
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '16px' }}>
-            <a href="https://drive.google.com/uc?export=download&id=1VFvgeK5n8dokryaiy_DHZqFl5FbxUnVF" target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#0284C7', color: '#FFFFFF', padding: '18px 36px', borderRadius: '16px', textDecoration: 'none', fontWeight: 800, fontSize: '20px', display: 'inline-flex', alignItems: 'center', gap: '12px', boxShadow: '0 10px 15px -3px rgba(2, 132, 199, 0.3)' }}>
+            <a href="https://drive.google.com/file/d/1hxaqqpm6tUORbI1P2AoHpcm4jMpt-54I/view?usp=sharing" target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#0284C7', color: '#FFFFFF', padding: '18px 36px', borderRadius: '16px', textDecoration: 'none', fontWeight: 800, fontSize: '20px', display: 'inline-flex', alignItems: 'center', gap: '12px', boxShadow: '0 10px 15px -3px rgba(2, 132, 199, 0.3)' }}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
               Get Android App
             </a>
@@ -66,7 +66,7 @@ export default function ProductLandingPage() {
           <p style={{ color: '#94A3B8', fontSize: '20px', marginBottom: '48px', lineHeight: 1.6 }}>
             Download the RM2 Secure app and create your society profile in minutes using our verified UP-RERA catalog integration.
           </p>
-          <a href="https://drive.google.com/uc?export=download&id=1VFvgeK5n8dokryaiy_DHZqFl5FbxUnVF" target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#10B981', color: '#FFFFFF', padding: '20px 48px', borderRadius: '18px', textDecoration: 'none', fontWeight: 800, fontSize: '22px', display: 'inline-block', boxShadow: '0 10px 15px -3px rgba(16, 185, 129, 0.3)' }}>
+          <a href="https://drive.google.com/file/d/1hxaqqpm6tUORbI1P2AoHpcm4jMpt-54I/view?usp=sharing" target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#10B981', color: '#FFFFFF', padding: '20px 48px', borderRadius: '18px', textDecoration: 'none', fontWeight: 800, fontSize: '22px', display: 'inline-block', boxShadow: '0 10px 15px -3px rgba(16, 185, 129, 0.3)' }}>
             Download APK for Android
           </a>
           <p style={{ color: '#475569', fontSize: '14px', marginTop: '24px' }}>Requires Android 10.0 or higher. Version 1.0.0</p>

@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.database import get_db
-from app.api.deps import get_active_society_id
+from app.api.deps import get_active_society_id, get_current_user
 from app.services.flat_service import FlatService
 from app.utils.response import success, error
 from app.utils.exceptions import AppException
@@ -119,3 +119,23 @@ async def update_flat_status(flat_id: int, request: Request, db: Session = Depen
         return error(e.message, e.code, e.details, e.status_code)
     except Exception as e:
         return error("Failed to update flat status", "SERVER_ERROR", str(e), 500)
+
+@router.patch("/{flat_id}/settings")
+async def update_flat_settings(flat_id: int, request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Allow primary residents to update flat-specific settings."""
+    from app.repositories import FlatUserRepository, FlatRepository
+    
+    fu_repo = FlatUserRepository(db)
+    flat_user = fu_repo.get_by_user(current_user.id)
+    if not flat_user or flat_user.flat_id != flat_id or flat_user.role != "primary":
+        return error("Only primary residents can update flat settings", "FORBIDDEN", status_code=403)
+        
+    data = await request.json()
+    flat_repo = FlatRepository(db)
+    flat = flat_repo.get_by_id(flat_id)
+    
+    if "allow_guard_force_entry" in data:
+        flat.allow_guard_force_entry = data["allow_guard_force_entry"]
+        flat_repo.save(flat)
+        
+    return success("Flat settings updated", data=flat.to_dict())

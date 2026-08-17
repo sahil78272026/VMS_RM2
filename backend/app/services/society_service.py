@@ -72,6 +72,44 @@ class SocietyService:
         )
         self.gate_repo.save(default_gate)
 
+        from app.models import User, Guard
+        import bcrypt
+
+        def create_or_get_guard_user(name: str, phone: str, pin: str):
+            u = self.db.query(User).filter(User.phone == phone).first()
+            if not u:
+                u = User(
+                    name=name,
+                    phone=phone,
+                    role="guard",
+                    password_hash=bcrypt.hashpw(pin.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                )
+                self.db.add(u)
+                self.db.commit()
+                self.db.refresh(u)
+            return u
+            
+        u1 = create_or_get_guard_user("Main Gate", f"11111{society.id:05d}", "1111")
+        g1 = Guard(
+            society_id=society.id,
+            user_id=u1.id,
+            employee_id=f"G-{society.id}-1",
+            shift="morning",
+            shift_pin_hash=bcrypt.hashpw("1111".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        )
+        self.db.add(g1)
+        
+        u2 = create_or_get_guard_user("Guard 1", f"22222{society.id:05d}", "2222")
+        g2 = Guard(
+            society_id=society.id,
+            user_id=u2.id,
+            employee_id=f"G-{society.id}-2",
+            shift="night",
+            shift_pin_hash=bcrypt.hashpw("2222".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        )
+        self.db.add(g2)
+        self.db.commit()
+
         return society
 
     def update(self, society_id: int, data: dict) -> Society:
@@ -252,7 +290,8 @@ class SocietyService:
         if self.admin_repo.is_admin(society_id, user.id):
             raise DuplicateEntryError("User is already an admin of this society")
 
-        sa = SocietyAdmin(society_id=society_id, user_id=user.id)
+        admin_role = data.get("admin_role", "regular") if data else "regular"
+        sa = SocietyAdmin(society_id=society_id, user_id=user.id, admin_role=admin_role)
         self.admin_repo.save(sa)
         logger.info(f"[SOCIETY] Assigned user {user.id} ({user.phone}) as admin of society {society_id}")
 
@@ -313,3 +352,85 @@ class SocietyService:
         self.repo.delete(society)
         logger.critical(f"[SOCIETY] PERMANENTLY DELETED society {society_id} ({society.name}) and all associated data.")
 
+    def import_from_csv(self, society_id: int, records: list) -> dict:
+        society = self.get_by_id(society_id)
+        flats_created = 0
+        users_created = 0
+        
+        from app.models import Flat, User, FlatUser
+        import bcrypt, secrets
+        from datetime import date
+        
+        existing_flats_db = self.flat_repo.get_all_by_society(society_id)
+        existing_flats = {f.flat_number: f.id for f in existing_flats_db}
+        
+        for row in records:
+            flat_num = row.get("flat_number")
+            name = row.get("resident_name")
+            phone = row.get("resident_phone")
+            role_type = row.get("type", "owner")
+            
+            if not flat_num or not name or not phone:
+                continue
+                
+            # Create or get Flat
+            if flat_num not in existing_flats:
+                new_flat = Flat(
+                    society_id=society_id,
+                    flat_number=flat_num,
+                    status="occupied"
+                )
+                self.db.add(new_flat)
+                self.db.commit()
+                self.db.refresh(new_flat)
+                existing_flats[flat_num] = new_flat.id
+                flats_created += 1
+                
+            flat_id = existing_flats[flat_num]
+            
+            # Create or get User
+            user = self.user_repo.get_by_phone(phone)
+            if not user:
+                random_pw = secrets.token_urlsafe(16)
+                pw_hash = bcrypt.hashpw(random_pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+                user = User(
+                    name=name,
+                    phone=phone,
+                    password_hash=pw_hash,
+                    role="resident",
+                    status="active"
+                )
+                self.user_repo.save(user)
+                users_created += 1
+                
+            # Create FlatUser mapping
+            existing_fu = self.db.query(FlatUser).filter_by(user_id=user.id, flat_id=flat_id).first()
+            if not existing_fu:
+                fu = FlatUser(
+                    society_id=society_id,
+                    user_id=user.id,
+                    flat_id=flat_id,
+                    role="primary",
+                    is_owner=(role_type == "owner"),
+                    can_approve=True,
+                    move_in_date=date.today()
+                )
+                self.db.add(fu)
+                self.db.commit()
+                
+            # Update flat status just in case
+            flat_obj = self.flat_repo.get_by_id(flat_id)
+            if flat_obj and flat_obj.status != "occupied":
+                flat_obj.status = "occupied"
+                self.db.commit()
+
+        # Update society flat count
+        all_flats_count = self.db.query(Flat).filter_by(society_id=society_id).count()
+        society.total_flats = all_flats_count
+        self.repo.save(society)
+        
+        logger.info(f"[SOCIETY] CSV Import: Created {flats_created} flats and {users_created} users for society {society_id}")
+        return {
+            "flats_created": flats_created,
+            "users_created": users_created
+        }

@@ -30,10 +30,10 @@ async def self_checkin(request: Request, db: Session = Depends(get_db)):
         flat_user_repo = FlatUserRepository(db)
         vl_service = VisitorLogService(db)
         data = await request.json()
-        log  = vl_service.self_checkin(data)
+        logs = vl_service.self_checkin(data)
         return success(
             "Check-in submitted. The resident has been notified. Please wait at the gate.",
-            data=log.to_dict(),
+            data=[l.to_dict() for l in logs],
             status_code=201
         )
     except AppException as e:
@@ -59,11 +59,7 @@ async def get_logs(request: Request, db: Session = Depends(get_db), current_user
             guard = guard_repo.get_by_user(current_user.id)
             if not guard:
                 return error("Guard profile not found", "NOT_FOUND", status_code=404)
-            from app.repositories import GateSessionRepository
-            session_repo = GateSessionRepository(db)
-            active = session_repo.get_active_by_guard(guard.id)
-            gate_id = active.gate_id if active else 1
-            logs = vl_service.get_today_for_gate(gate_id)
+            logs = vl_service.get_today_for_society(guard.society_id)
             return success("Visitor logs fetched", data=[l.to_dict() for l in logs])
 
         # Admin — filtered
@@ -93,7 +89,17 @@ async def get_pending(request: Request, db: Session = Depends(get_db), current_u
     """Guard: live feed of all pending approvals across the society."""
     try:
         from app.models import VisitorLog
-        pending = db.query(VisitorLog).filter_by(approval_status="pending").all()
+        guard_repo = GuardRepository(db)
+        user_id = current_user.id
+        guard = guard_repo.get_by_user(user_id)
+        if not guard:
+            return error("Guard profile not found", "NOT_FOUND", status_code=404)
+            
+        pending = db.query(VisitorLog).filter(
+            VisitorLog.society_id == guard.society_id,
+            VisitorLog.status.in_(["pending", "approved", "denied"])
+        ).order_by(VisitorLog.created_at.desc()).all()
+        
         return success("Pending approvals", data=[l.to_dict() for l in pending])
     except Exception as e:
         return error("Failed to fetch pending", "SERVER_ERROR", str(e), 500)
@@ -125,8 +131,8 @@ async def create_log(request: Request, db: Session = Depends(get_db), current_us
             return error("Guard profile not found", "NOT_FOUND", status_code=404)
 
         data = await request.json()
-        log  = vl_service.create_by_guard(guard.id, data)
-        return success("Visitor registered and resident notified", data=log.to_dict(), status_code=201)
+        logs = vl_service.create_by_guard(guard.id, data)
+        return success("Visitor registered and resident notified", data=[l.to_dict() for l in logs], status_code=201)
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)
     except Exception as e:
@@ -149,6 +155,27 @@ async def confirm_entry(log_id: int, request: Request, db: Session = Depends(get
         return error(e.message, e.code, e.details, e.status_code)
     except Exception as e:
         return error("Failed to confirm entry", "SERVER_ERROR", str(e), 500)
+
+
+@router.patch("/{log_id}/force-approve")
+async def force_approve(log_id: int, request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    """Guard forcefully approves a visitor entry request (if allowed by resident)."""
+    try:
+        guard_repo = GuardRepository(db)
+        vl_service = VisitorLogService(db)
+        user_id = current_user.id
+        guard   = guard_repo.get_by_user(user_id)
+        if not guard:
+            return error("Guard profile not found", "NOT_FOUND", status_code=404)
+
+        data = await request.json()
+        reason = data.get("reason", "No response from resident")
+        log = vl_service.force_approve(log_id, guard.id, reason)
+        return success("Force entry approved.", data=log.to_dict())
+    except AppException as e:
+        return error(e.message, e.code, e.details, e.status_code)
+    except Exception as e:
+        return error("Failed to force approve", "SERVER_ERROR", str(e), 500)
 
 
 @router.patch("/{log_id}/exit")

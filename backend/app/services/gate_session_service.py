@@ -60,8 +60,8 @@ class GateSessionService:
         logger.info(f"[GATE_SESSION] Shift ended — guard {guard_id}")
         return session
 
-    def get_active(self):
-        return self.repo.get_all_active()
+    def get_active(self, society_id: int = None):
+        return self.repo.get_all_active(society_id=society_id)
 
     def get_by_guard(self, guard_id: int):
         return self.repo.get_by_guard(guard_id)

@@ -134,7 +134,7 @@ class VisitorLogService:
         errors = {}
         if not data.get("visitor_name"):  errors["visitor_name"]  = "Required"
         if not data.get("visitor_phone"): errors["visitor_phone"] = "Required"
-        if not data.get("flat_id"):       errors["flat_id"]       = "Required"
+        if not data.get("flat_id") and not data.get("flat_ids"): errors["flat_id"] = "Required"
         if not data.get("entry_mode"):    errors["entry_mode"]    = "Required"
         if not data.get("stay_duration"): errors["stay_duration"] = "Required"
         if not data.get("purpose"):       errors["purpose"]       = "Required"
@@ -143,26 +143,24 @@ class VisitorLogService:
             raise ValidationError(errors)
 
         try:
-            flat_id = int(data["flat_id"])
+            if "flat_ids" in data:
+                flat_ids = [int(fid) for fid in data["flat_ids"]]
+            else:
+                flat_ids = [int(data["flat_id"])]
         except ValueError:
-            raise ValidationError({"flat_id": "Must be an integer"})
+            raise ValidationError({"flat_ids": "Must be integers"})
 
-        # Check flat exists
-        flat = self.flat_repo.get_by_id(flat_id)
-        if not flat:
-            raise NotFoundError("Flat")
+        flats = []
+        for fid in flat_ids:
+            flat = self.flat_repo.get_by_id(fid)
+            if not flat:
+                raise NotFoundError(f"Flat ID {fid}")
+            flat_user = self.flat_user_repo.get_primary_by_flat(fid)
+            if not flat_user:
+                raise NotFoundError(f"Resident for flat {fid}")
+            flats.append((flat, flat_user))
 
-        society_id = flat.society_id
-
-        # Check blacklist within society
-        if self.visitor_repo.is_blacklisted(data["visitor_phone"], society_id=society_id):
-            visitor = self.visitor_repo.get_by_phone(data["visitor_phone"], society_id=society_id)
-            raise BlacklistedVisitorError(reason=visitor.blacklist_reason)
-
-        # Get primary resident of flat
-        flat_user = self.flat_user_repo.get_primary_by_flat(flat_id)
-        if not flat_user:
-            raise NotFoundError("Resident for this flat")
+        society_id = flats[0][0].society_id
 
         # Get or create visitor in society
         visitor = self._get_or_create_visitor(
@@ -178,39 +176,44 @@ class VisitorLogService:
         active_sessions = session_repo.get_all_active()
         gate_session = next((s for s in active_sessions if s.gate_id == int(data["entry_gate_id"])), None)
         
-        actual_guard_id = gate_session.guard_id if gate_session else guard_id
-        actual_guard_name = gate_session.guard_name if gate_session else None
+        created_logs = []
+        for flat, flat_user in flats:
+            log = VisitorLog(
+                society_id=society_id,
+                flat_id=flat.id,
+                visitor_id=visitor.id,
+                flat_user_id=flat_user.id,
+                entry_gate_id=int(data["entry_gate_id"]),
+                expected_exit_gate_id=exit_gate_id,
+                purpose=data["purpose"],
+                entry_mode=data["entry_mode"],
+                vehicle_number=data.get("vehicle_number", ""),
+                stay_duration=data["stay_duration"],
+                registered_by_guard=(gate_session.guard_id if gate_session else guard_id),
+                guard_name=(gate_session.guard_name if gate_session else None),
+                approval_source="guard_initiated",
+                approval_status="pending",
+                status="pending",
+                visitor_count=int(data.get("visitor_count", 1)),
+            )
+            self.db.add(log)
+            created_logs.append((log, flat_user))
+            
+        self.db.commit()
 
-        # Create log
-        log = VisitorLog(
-            society_id            = society_id,
-            visitor_id            = visitor.id,
-            flat_id               = flat.id,
-            flat_user_id          = flat_user.id,
-            entry_gate_id         = data["entry_gate_id"],
-            entry_mode            = data["entry_mode"],
-            vehicle_number        = data.get("vehicle_number"),
-            registered_by_guard   = actual_guard_id,
-            guard_name            = actual_guard_name,
-            approval_source       = "guard_initiated",
-            approval_status       = "pending",
-            purpose               = data["purpose"],
-            stay_duration         = data["stay_duration"],
-            expected_exit_gate_id = exit_gate_id,
-            status                = "pending",
-            visitor_count         = int(data.get("visitor_count", 1)),
-        )
+        # Send notifications
+        for log, flat_user in created_logs:
+            self.db.refresh(log)
+            # Notification is fire-and-forget; do not block API on failure
+            try:
+                self.notification_service.notify_approval_request(log)
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to send notification for log {log.id}: {str(e)}")
+            
+        return [log for log, _ in created_logs]
 
-        self.log_repo.save(log)
-        logger.info(f"[VISITOR_LOG] Created by guard {guard_id} — visitor: {visitor.phone} → flat: {flat.flat_number} (Society: {society_id})")
-
-        # Notify resident
-        from app.services.notification_service import NotificationService
-        NotificationService(self.db).notify_approval_request(log)
-
-        return log
-
-    def self_checkin(self, data: dict) -> VisitorLog:
+    def self_checkin(self, data: dict):
         """
         Visitor self-registers via QR code.
         No guard involved — resident notified directly.
@@ -218,7 +221,7 @@ class VisitorLogService:
         errors = {}
         if not data.get("visitor_name"):  errors["visitor_name"]  = "Required"
         if not data.get("visitor_phone"): errors["visitor_phone"] = "Required"
-        if not data.get("flat_id"):       errors["flat_id"]       = "Required"
+        if not data.get("flat_id") and not data.get("flat_ids"): errors["flat_id"] = "Required"
         if not data.get("entry_mode"):    errors["entry_mode"]    = "Required"
         if not data.get("stay_duration"): errors["stay_duration"] = "Required"
         if not data.get("purpose"):       errors["purpose"]       = "Required"
@@ -226,24 +229,29 @@ class VisitorLogService:
             raise ValidationError(errors)
 
         try:
-            flat_id = int(data["flat_id"])
+            if "flat_ids" in data:
+                flat_ids = [int(fid) for fid in data["flat_ids"]]
+            else:
+                flat_ids = [int(data["flat_id"])]
         except ValueError:
-            raise ValidationError({"flat_id": "Must be an integer"})
+            raise ValidationError({"flat_ids": "Must be integers"})
 
-        flat = self.flat_repo.get_by_id(flat_id)
-        if not flat:
-            raise NotFoundError("Flat")
+        flats = []
+        for fid in flat_ids:
+            flat = self.flat_repo.get_by_id(fid)
+            if not flat:
+                raise NotFoundError(f"Flat ID {fid}")
+            flat_user = self.flat_user_repo.get_primary_by_flat(fid)
+            if not flat_user:
+                raise NotFoundError(f"Resident for flat {fid}")
+            flats.append((flat, flat_user))
 
-        society_id = flat.society_id
+        society_id = flats[0][0].society_id
 
         # Check blacklist in society
         if self.visitor_repo.is_blacklisted(data["visitor_phone"], society_id=society_id):
             visitor = self.visitor_repo.get_by_phone(data["visitor_phone"], society_id=society_id)
             raise BlacklistedVisitorError(reason=visitor.blacklist_reason)
-
-        flat_user = self.flat_user_repo.get_primary_by_flat(flat_id)
-        if not flat_user:
-            raise NotFoundError("Resident for this flat")
 
         visitor = self._get_or_create_visitor(
             data["visitor_name"], data["visitor_phone"], society_id, data.get("photo_base64")
@@ -258,31 +266,41 @@ class VisitorLogService:
             entry_gate_id = entry_gates[0].id
         exit_gate_id  = self._resolve_exit_gate(entry_gate_id, data["entry_mode"], society_id=society_id)
 
-        log = VisitorLog(
-            society_id            = society_id,
-            visitor_id            = visitor.id,
-            flat_id               = flat.id,
-            flat_user_id          = flat_user.id,
-            entry_gate_id         = entry_gate_id,
-            entry_mode            = data["entry_mode"],
-            vehicle_number        = data.get("vehicle_number"),
-            registered_by_guard   = None,
-            approval_source       = "self_checkin",
-            approval_status       = "pending",
-            purpose               = data["purpose"],
-            stay_duration         = data["stay_duration"],
-            expected_exit_gate_id = exit_gate_id,
-            status                = "pending",
-            visitor_count         = int(data.get("visitor_count", 1)),
-        )
+        created_logs = []
+        for flat, flat_user in flats:
+            log = VisitorLog(
+                society_id            = society_id,
+                visitor_id            = visitor.id,
+                flat_id               = flat.id,
+                flat_user_id          = flat_user.id,
+                entry_gate_id         = entry_gate_id,
+                entry_mode            = data["entry_mode"],
+                vehicle_number        = data.get("vehicle_number"),
+                registered_by_guard   = None,
+                approval_source       = "self_checkin",
+                approval_status       = "pending",
+                purpose               = data["purpose"],
+                stay_duration         = data["stay_duration"],
+                expected_exit_gate_id = exit_gate_id,
+                status                = "pending",
+                visitor_count         = int(data.get("visitor_count", 1)),
+            )
+            self.db.add(log)
+            created_logs.append((log, flat_user))
 
-        self.log_repo.save(log)
-        logger.info(f"[VISITOR_LOG] Self check-in — visitor: {visitor.phone} → flat: {flat.flat_number} (Society: {society_id})")
+        self.db.commit()
 
         from app.services.notification_service import NotificationService
-        NotificationService(self.db).notify_approval_request(log)
+        ns = NotificationService(self.db)
+        for log, flat_user in created_logs:
+            self.db.refresh(log)
+            try:
+                ns.notify_approval_request(log)
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to send notification for log {log.id}: {str(e)}")
 
-        return log
+        return [log for log, _ in created_logs]
 
     def approve(self, log_id: int, flat_user_id: int) -> VisitorLog:
         """Resident approves a visitor entry request."""
@@ -336,6 +354,37 @@ class VisitorLogService:
 
         self.log_repo.save(log)
         logger.info(f"[VISITOR_LOG] Denied log {log_id} by flat_user {flat_user_id}")
+
+        return log
+
+    def force_approve(self, log_id: int, guard_id: int, reason: str) -> VisitorLog:
+        """Guard forcefully approves a visitor if the resident has allowed it."""
+        log = self.log_repo.get_by_id(log_id)
+        if not log:
+            raise NotFoundError("Visitor log")
+
+        if log.approval_status != "pending":
+            raise InvalidStatusTransitionError(log.approval_status, "approved")
+
+        flat = self.flat_repo.get_by_id(log.flat_id)
+        if not flat or not flat.allow_guard_force_entry:
+            raise ForbiddenError("This flat has disabled guard force entry.")
+
+        now = datetime.utcnow()
+        log.approval_status = "approved"
+        log.status = "inside"
+        log.entered_at = now
+        log.expected_exit_by = self._calculate_expected_exit(now, log.stay_duration)
+        log.is_force_approved = True
+        log.force_approve_reason = reason
+        log.approved_at = now
+        
+        self.log_repo.save(log)
+        logger.info(f"[VISITOR_LOG] Force approved log {log_id} by guard {guard_id}")
+        
+        # We can also notify the resident that the guard let the visitor in forcefully
+        from app.services.notification_service import NotificationService
+        NotificationService(self.db).notify_guard_of_approval(log)  # Re-use or create specific notification
 
         return log
 
@@ -411,8 +460,8 @@ class VisitorLogService:
     def get_by_flat(self, flat_id: int, page: int = 1, per_page: int = 20):
         return self.log_repo.get_by_flat(flat_id, page, per_page)
 
-    def get_today_for_gate(self, gate_id: int):
-        return self.log_repo.get_today_for_gate(gate_id)
+    def get_today_for_society(self, society_id: int):
+        return self.log_repo.get_today_for_society(society_id)
 
     def get_all_filtered(self, filters: dict, page: int = 1, per_page: int = 20, society_id: int = None):
         return self.log_repo.get_all_filtered(filters, page, per_page, society_id=society_id)

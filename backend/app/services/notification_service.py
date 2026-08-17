@@ -138,18 +138,27 @@ class NotificationService:
             logger.info(f"[NOTIF] Approval request sent to user {user.id} for log {log.id}")
 
     def notify_guard_of_approval(self, log: VisitorLog):
-        """Notify guard dashboard when resident approves — real-time SSE event."""
-        # Push SSE event to all active guard connections
+        # Push SSE event to all active guard connections and send Push Notification
         from app.models import Guard
-        guards = self.db.query(Guard).all()
+        guards = self.db.query(Guard).filter_by(society_id=log.society_id).all()
         for guard in guards:
+            # SSE Event
             self._push_sse(guard.user_id, "visitor_approved", {
                 "visitor_log_id": log.id,
                 "flat_number":    log.flat.flat_number if log.flat else None,
                 "visitor_name":   log.visitor.name if log.visitor else None,
                 "message":        f"Visitor {log.visitor.name} approved for Flat {log.flat.flat_number}",
             })
-        logger.info(f"[NOTIF] Guard notified of approval for log {log.id} via SSE")
+            
+            # Push Notification to guard devices
+            if guard.user:
+                self._send_push(
+                    guard.user.id,
+                    "Visitor Approved ✅",
+                    f"{log.visitor.name} has been approved for Flat {log.flat.flat_number}."
+                )
+
+        logger.info(f"[NOTIF] Guard notified of approval for log {log.id}")
 
     def notify_overdue(self, log: VisitorLog):
         """

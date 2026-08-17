@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, Alert, TouchableOpacity, ScrollView, Image, BackHandler, Linking, PanResponder, Dimensions, Animated, StyleSheet, RefreshControl, Switch } from 'react-native';
+import { View, Text, Alert, TouchableOpacity, ScrollView, Image, BackHandler, Linking, PanResponder, Dimensions, Animated, StyleSheet, RefreshControl, Switch, ActivityIndicator, Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
+import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { VisitorLogService, PreApprovalService, FrequentPassService, MaintenanceService, AnnouncementService, FlatUserService, AmenityService } from '../../services';
+import { VisitorLogService, PreApprovalService, FrequentPassService, MaintenanceService, AnnouncementService, FlatUserService, AmenityService, UserService, HelpdeskService, OCRService } from '../../services';
 import { T, Card, Badge, Avatar, Btn, Input, Select, PageLayout, StatCard, EmptyState, LoadingScreen, Modal, Tabs, Calendar, SocietySwitcher, QuickActionTile } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
-import { BASE_URL } from '../../services/api';
+import api, { BASE_URL } from '../../services/api';
 import { formatTimestamp, formatDate } from '../../utils/date';
 
 const { width } = Dimensions.get('window');
@@ -43,10 +44,10 @@ const Warm = {
 export function ResidentDashboard({ route }: any) {
   const insets = useSafeAreaInsets();
   const { user, logout, activeSociety, activeSocietyId } = useAuth();
-  const [currentTab, setCurrentTab] = useState(route?.params?.tab || 'dashboard');
+  const [currentTab, setCurrentTab] = useState(route?.params?.tab || 'home');
   const [showCalendar, setShowCalendar] = useState(false);
 
-  const tabOrder = ['dashboard', 'history', 'passes', 'services', 'profile'];
+  const tabOrder = ['home', 'dashboard', 'history', 'passes', 'services', 'profile'];
   const currentTabRef = useRef(currentTab);
   currentTabRef.current = currentTab;
 
@@ -83,8 +84,8 @@ export function ResidentDashboard({ route }: any) {
 
   useEffect(() => {
     const backAction = () => {
-      if (currentTab !== 'dashboard') {
-        setCurrentTab('dashboard');
+      if (currentTab !== 'home') {
+        setCurrentTab('home');
         return true;
       }
       return false;
@@ -108,13 +109,15 @@ export function ResidentDashboard({ route }: any) {
   const [approvingRelation, setApprovingRelation] = useState('spouse');
   const [myFlatUser, setMyFlatUser] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
+  const [helpdeskTickets, setHelpdeskTickets] = useState<any[]>([]);
   
   const [loading, setLoading] = useState(true);
+  const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const [modal, setModal] = useState<any>(null);
   const [form, setForm] = useState<any>({});
   const [refreshing, setRefreshing] = useState(false);
-
   const [notificationsMuted, setNotificationsMuted] = useState(user?.notifications_muted || false);
+  const [allowGuardForceEntry, setAllowGuardForceEntry] = useState(flatStatus?.allow_guard_force_entry || false);
   const [playRingtone, setPlayRingtone] = useState(true);
   const soundRef = useRef<Audio.Sound | null>(null);
 
@@ -128,6 +131,12 @@ export function ResidentDashboard({ route }: any) {
     setPlayRingtone(val);
     await AsyncStorage.setItem('play_visitor_ringtone', String(val));
   };
+
+  useEffect(() => {
+    if (flatStatus) {
+      setAllowGuardForceEntry(flatStatus.allow_guard_force_entry || false);
+    }
+  }, [flatStatus]);
 
   useEffect(() => {
     const manageSound = async () => {
@@ -168,7 +177,7 @@ export function ResidentDashboard({ route }: any) {
       return;
     }
     try {
-      const [pr, lr, br, ar, par, fpr, pfr, myfr, srv] = await Promise.all([
+      const [pr, lr, br, ar, par, fpr, pfr, myfr, srv, hr] = await Promise.all([
         VisitorLogService.getMyPending().catch(() => ({ data: { data: [] } })),
         VisitorLogService.getMyLogs({ per_page: 20 }).catch(() => ({ data: { data: [] } })),
         MaintenanceService.getMy().catch(() => ({ data: { data: { payments: [] } } })),
@@ -178,6 +187,7 @@ export function ResidentDashboard({ route }: any) {
         FlatUserService.getPendingFamily().catch(() => ({ data: { data: [] } })),
         FlatUserService.getMyFlat().catch(() => ({ data: { data: [] } })),
         AmenityService.getAll({ society_id: activeSocietyId }).catch(() => ({ data: { data: [] } })),
+        HelpdeskService.getMy().catch(() => ({ data: { data: { items: [] } } })),
       ]);
       setPending(pr.data?.data || []);
       setLogs(lr.data?.data?.items || lr.data?.data || []);
@@ -192,6 +202,7 @@ export function ResidentDashboard({ route }: any) {
       const me = allMembers.find((m: any) => m.user_id === user?.id);
       setMyFlatUser(me || null);
       setServices(srv.data?.data || []);
+      setHelpdeskTickets(hr.data?.data?.items || hr.data?.data || []);
     } catch {}
     setLoading(false);
   }, [activeSocietyId]);
@@ -244,6 +255,7 @@ export function ResidentDashboard({ route }: any) {
         amount: modal.amount,
         months_added: modal.months_added,
         utr_number: form.utr_number,
+        proof_url: form.receipt_url || null,
       });
       setModal(null);
       load();
@@ -284,6 +296,17 @@ export function ResidentDashboard({ route }: any) {
     }
   };
 
+  const toggleForceEntry = async (val: boolean) => {
+    if (!flatStatus) return;
+    setAllowGuardForceEntry(val);
+    try {
+      await api.patch(`/flats/${flatStatus.id}/settings`, { allow_guard_force_entry: val });
+    } catch (e) {
+      console.log('Failed to toggle force entry', e);
+      setAllowGuardForceEntry(!val); // rollback on fail
+    }
+  };
+
   const handlePromote = async (id: string) => {
     try {
       await FlatUserService.promote(id);
@@ -314,6 +337,29 @@ export function ResidentDashboard({ route }: any) {
     }
   };
 
+  const handleMoveOut = async () => {
+    Alert.alert(
+      "Confirm Move Out",
+      "Are you sure you want to move out? You will lose access to this flat.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Move Out", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await FlatUserService.moveOut();
+              Toast.show({ type: 'success', text1: 'Moved Out', text2: 'You have been moved out successfully' });
+              logout(); // Log out or refresh to trigger "No Active Flat" fallback
+            } catch (e: any) {
+              Toast.show({ type: 'error', text1: 'Error', text2: e.response?.data?.message || 'Failed to move out' });
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleAddMember = async () => {
     if (!addMemberForm.name || !addMemberForm.phone || addMemberForm.phone.length !== 10) {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter a valid name and 10-digit phone number' });
@@ -336,7 +382,7 @@ export function ResidentDashboard({ route }: any) {
   };
 
   const openUPI = (amount: number) => {
-    const upiId = process.env.EXPO_PUBLIC_UPI_ID || 'rm2residency@okhdfcbank';
+    const upiId = activeSociety?.upi_id || process.env.EXPO_PUBLIC_UPI_ID || 'rm2residency@okhdfcbank';
     Linking.openURL(`upi://pay?pa=${upiId}&pn=${encodeURIComponent(activeSociety?.name || 'RM2 Residency')}&am=${amount}&cu=INR`).catch(() => {
       Toast.show({ type: 'error', text1: 'Error', text2: 'No UPI app found. Please copy UPI ID and pay manually.' });
     });
@@ -351,6 +397,27 @@ export function ResidentDashboard({ route }: any) {
       valid_until: today,
     });
     setModal({ type: 'pre', defaultPurpose: purpose });
+  };
+
+  const createTicket = async () => {
+    if (!form?.title || !form?.description) {
+      Toast.show({ type: 'error', text1: 'Validation Error', text2: 'Please fill title and description' });
+      return;
+    }
+    try {
+      await HelpdeskService.create({
+        title: form.title,
+        description: form.description,
+        category: form.category || 'other',
+        priority: form.priority || 'medium',
+      });
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Ticket raised successfully' });
+      setModal(null);
+      setForm({});
+      load();
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: e.response?.data?.message || 'Failed to raise ticket' });
+    }
   };
 
   const createPre = async () => {
@@ -381,6 +448,73 @@ export function ResidentDashboard({ route }: any) {
     }
   };
 
+  const [ocrLoading, setOcrLoading] = useState(false);
+
+  const handleUploadScreenshot = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets[0].uri) {
+        setOcrLoading(true);
+        const uri = result.assets[0].uri;
+        
+        const formData = new FormData();
+        const filename = uri.split('/').pop() || 'screenshot.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+        if (Platform.OS === 'web') {
+          const fetchRes = await fetch(uri);
+          const blob = await fetchRes.blob();
+          formData.append('file', blob, filename);
+        } else {
+          formData.append('file', {
+            uri,
+            name: filename,
+            type,
+          } as any);
+        }
+
+        const res = await OCRService.scanUtr(formData);
+        
+        if (res.data?.data?.utr_code) {
+          setForm((prev: any) => ({ ...(prev || {}), utr_number: res.data.data.utr_code, proof_url: uri, proof_filename: filename, receipt_url: res.data.data.receipt_url }));
+          Toast.show({ type: 'success', text1: 'Success', text2: `UTR ${res.data.data.utr_code} extracted automatically!` });
+        } else {
+          setForm((prev: any) => ({ ...(prev || {}), proof_url: uri, proof_filename: filename, receipt_url: res.data?.data?.receipt_url }));
+          Toast.show({ type: 'error', text1: 'Not Found', text2: 'Could not detect UTR code in the screenshot. Please enter it manually.' });
+        }
+      }
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to scan image for UTR code.' });
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const submitDonation = async () => {
+    if (!form?.utr_number || !form?.amount) {
+      return Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter amount and UTR number' });
+    }
+    try {
+      await api.post('/societies/donate', {
+        amount: parseFloat(form.amount),
+        utr_number: form.utr_number,
+        purpose: form.purpose || 'Society Welfare Fund',
+        receipt_url: form.receipt_url || null
+      });
+      Toast.show({ type: 'success', text1: 'Donation Submitted', text2: 'Thank you for your contribution to the society welfare!' });
+      setModal(null);
+      setForm({});
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to submit donation' });
+    }
+  };
+
   const validUntil = flatStatus?.maintenance_valid_until ? new Date(flatStatus.maintenance_valid_until) : null;
   const isMaintenanceExpired = validUntil ? validUntil < new Date() : true;
   const daysRemaining = validUntil ? Math.ceil((validUntil.getTime() - new Date().getTime()) / (1000 * 3600 * 24)) : 0;
@@ -398,10 +532,118 @@ export function ResidentDashboard({ route }: any) {
 
   // ── Render Tab Content ─────────────────────────────────────────────────────
   const renderContent = () => {
-    if (currentTab === 'dashboard') {
+    if (currentTab === 'home') {
       return (
         <View>
-          {/* 1. Live Gate Status (Hero Card) */}
+          <View style={{ marginBottom: 20, paddingHorizontal: 4 }}>
+            <Text style={{ fontSize: 28, fontWeight: '800', color: Warm.text }}>
+              Flat {activeFlatNumber}
+            </Text>
+            <Text style={{ fontSize: 16, color: Warm.textMuted, marginTop: 4 }}>
+              {user?.name || 'Resident'}
+            </Text>
+          </View>
+
+          {/* 3. Society Maintenance & Status Card (Only shown if payment is due) */}
+          {isMaintenanceExpired && (
+            <View style={{
+              marginBottom: 20,
+              backgroundColor: '#FEF2F2',
+              borderColor: '#FCA5A5',
+              borderWidth: 1.5,
+              borderRadius: 20,
+              padding: 18,
+              ...Warm.shadow,
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 15 }}>⚠️</Text>
+                    <Text style={{ fontSize: 11, color: Warm.red, textTransform: 'uppercase', fontWeight: '800', letterSpacing: 0.5 }}>
+                      Society Maintenance Due
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginTop: 3 }}>
+                    Monthly Dues Pending
+                  </Text>
+                  <Text style={{ color: Warm.textDim, fontSize: 12, marginTop: 2 }}>
+                    {validUntil ? `Cycle ended ${formatDate(validUntil)}` : 'No active cycle recorded'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    setForm({});
+                    setModal({ type: 'renew', amount: 1200, months_added: 6 });
+                  }}
+                  style={{
+                    backgroundColor: Warm.green,
+                    borderRadius: 12,
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    shadowColor: Warm.green,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 4,
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
+                    ⚡ Pay Dues
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Donation Quick Action */}
+          <TouchableOpacity
+            onPress={() => {
+              setForm({ amount: '500', purpose: 'Society Welfare Fund' });
+              setModal({ type: 'donate' });
+            }}
+            style={{
+              marginBottom: 20,
+              backgroundColor: '#F0F9FF',
+              borderColor: '#BAE6FD',
+              borderWidth: 1.5,
+              borderRadius: 20,
+              padding: 18,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              ...Warm.shadow,
+            }}
+          >
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 18 }}>❤️</Text>
+                <Text style={{ fontSize: 13, color: '#0369A1', textTransform: 'uppercase', fontWeight: '800', letterSpacing: 0.5 }}>
+                  Society Welfare
+                </Text>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginTop: 4 }}>
+                Donate for Community
+              </Text>
+              <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>
+                Support local events and maintenance
+              </Text>
+            </View>
+            <View style={{
+              backgroundColor: '#0EA5E9',
+              borderRadius: 12,
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+              shadowColor: '#0EA5E9',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+            }}>
+              <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
+                Donate →
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+                    {/* 1. Live Gate Status (Hero Card) */}
           {pending.length > 0 && (
             <View style={{ marginBottom: 20 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
@@ -445,9 +687,10 @@ export function ResidentDashboard({ route }: any) {
                       <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 22 }}>{log.visitor?.name}</Text>
                       <Text style={{ color: Warm.accent, fontSize: 15, fontWeight: '700', marginTop: 4 }}>
                         Purpose: {log.purpose}
+                        {log.expected_exit_by ? ` · Exit by: ${new Date(log.expected_exit_by + 'Z').toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : ''}
                       </Text>
                       <Text style={{ color: Warm.textMuted, fontSize: 14, marginTop: 4 }}>
-                        📞 {log.visitor?.phone}{log.vehicle_number ? ` · 🚗 ${log.vehicle_number}` : ''}
+                        📞 {log.visitor?.phone}{log.vehicle_number ? ` · ${log.entry_mode === 'two_wheeler' ? '🛵' : '🚗'} ${log.vehicle_number}` : log.entry_mode === 'foot' ? ' · 🚶 On Foot' : ` · ${log.entry_mode === 'two_wheeler' ? '🛵 Two Wheeler' : '🚗 Four Wheeler'}`}
                       </Text>
                       <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 4, fontStyle: 'italic' }}>
                         🕒 Arrived: {formatTimestamp(log.created_at)}
@@ -554,53 +797,40 @@ export function ResidentDashboard({ route }: any) {
             </TouchableOpacity>
           )}
 
-          {/* 3. Society Maintenance & Status Card (Only shown if payment is due) */}
-          {isMaintenanceExpired && (
-            <View style={{
-              marginBottom: 20,
-              backgroundColor: '#FEF2F2',
-              borderColor: '#FCA5A5',
-              borderWidth: 1.5,
-              borderRadius: 20,
-              padding: 18,
-              ...Warm.shadow,
-            }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <View style={{ flex: 1, marginRight: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontSize: 15 }}>⚠️</Text>
-                    <Text style={{ fontSize: 11, color: Warm.red, textTransform: 'uppercase', fontWeight: '800', letterSpacing: 0.5 }}>
-                      Society Maintenance Due
+
+        
+          {/* Announcements */}
+          {announcements.length > 0 && (
+            <View style={{ marginBottom: 20 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: Warm.text }}>📢 Latest Announcements</Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20, gap: 12 }}>
+                {announcements.map((ann: any) => (
+                  <View key={ann.id} style={{
+                    backgroundColor: ann.priority === 'urgent' ? Warm.redDim : Warm.cardBg,
+                    borderColor: ann.priority === 'urgent' ? '#FCA5A5' : Warm.cardBorder,
+                    borderWidth: 1,
+                    borderRadius: 16,
+                    padding: 16,
+                    width: width * 0.75,
+                    ...Warm.shadow,
+                  }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: Warm.textMuted, textTransform: 'uppercase' }}>
+                        {formatTimestamp(ann.created_at)}
+                      </Text>
+                      {ann.priority === 'urgent' && <Badge label="URGENT" variant="danger" />}
+                    </View>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: Warm.text, marginBottom: 4 }} numberOfLines={2}>
+                      {ann.title}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: Warm.textMuted, lineHeight: 18 }} numberOfLines={3}>
+                      {ann.body}
                     </Text>
                   </View>
-                  <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginTop: 3 }}>
-                    Monthly Dues Pending
-                  </Text>
-                  <Text style={{ color: Warm.textDim, fontSize: 12, marginTop: 2 }}>
-                    {validUntil ? `Cycle ended ${formatDate(validUntil)}` : 'No active cycle recorded'}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => {
-                    setForm({});
-                    setModal({ type: 'renew', amount: 1200, months_added: 6 });
-                  }}
-                  style={{
-                    backgroundColor: Warm.green,
-                    borderRadius: 12,
-                    paddingVertical: 10,
-                    paddingHorizontal: 16,
-                    shadowColor: Warm.green,
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.2,
-                    shadowRadius: 4,
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
-                    ⚡ Pay Dues
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                ))}
+              </ScrollView>
             </View>
           )}
 
@@ -617,18 +847,31 @@ export function ResidentDashboard({ route }: any) {
               </View>
 
               {logs.slice(0, 1).map((log: any) => {
-                const isInside = log.status === 'inside' || log.approval_status === 'approved';
-                const isDenied = log.approval_status === 'denied';
-                const tagBg = isInside ? Warm.greenDim : isDenied ? Warm.redDim : Warm.amberDim;
-                const tagFg = isInside ? Warm.green : isDenied ? Warm.red : '#B45309';
+                const derivedState = log.status === 'expected' && log.approval_status ? log.approval_status : log.status;
+                let cardBg = Warm.cardBg;
+                let cardBorder = Warm.cardBorder;
+                let tagBg = Warm.cardSubtle;
+                let tagFg = Warm.textMuted;
+                
+                switch(derivedState) {
+                  case 'pending': cardBg = '#FEF3C7'; cardBorder = '#FDE68A'; tagBg = '#FDE68A'; tagFg = '#92400E'; break;
+                  case 'approved': cardBg = '#E0F2FE'; cardBorder = '#BAE6FD'; tagBg = '#BAE6FD'; tagFg = '#0369A1'; break;
+                  case 'denied': cardBg = '#FFE4E6'; cardBorder = '#FECDD3'; tagBg = '#FECDD3'; tagFg = '#E11D48'; break;
+                  case 'inside': cardBg = '#D1FAE5'; cardBorder = '#A7F3D0'; tagBg = '#A7F3D0'; tagFg = '#059669'; break;
+                  case 'overdue': cardBg = '#FEE2E2'; cardBorder = '#FCA5A5'; tagBg = '#FCA5A5'; tagFg = '#DC2626'; break;
+                  case 'exited': cardBg = '#F3F4F6'; cardBorder = '#E5E7EB'; tagBg = '#E5E7EB'; tagFg = '#4B5563'; break;
+                  case 'unconfirmed_exit': cardBg = '#FFEDD5'; cardBorder = '#FDBA74'; tagBg = '#FDBA74'; tagFg = '#C2410C'; break;
+                  case 'cancelled': cardBg = '#F3F4F6'; cardBorder = '#D1D5DB'; tagBg = '#D1D5DB'; tagFg = '#374151'; break;
+                  default: break;
+                }
 
                 return (
                   <View
                     key={log.id}
                     style={{
                       padding: 14,
-                      backgroundColor: Warm.cardBg,
-                      borderColor: Warm.cardBorder,
+                      backgroundColor: cardBg,
+                      borderColor: cardBorder,
                       borderWidth: 1,
                       borderRadius: 16,
                       marginBottom: 10,
@@ -640,17 +883,33 @@ export function ResidentDashboard({ route }: any) {
                     <Avatar
                       name={log.visitor?.name || 'V'}
                       size={42}
-                      color={isInside ? Warm.green : isDenied ? Warm.red : Warm.amber}
+                      color={tagFg}
                     />
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>{log.visitor?.name}</Text>
-                      <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>
-                        {log.purpose} · {formatTimestamp(log.created_at)}
-                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                        <Text style={{ color: Warm.textMuted, fontSize: 12 }}>
+                          {log.purpose} · {formatTimestamp(log.created_at)}
+                        </Text>
+                        {log.status === 'exited' && log.actual_exit_at ? (
+                          <Text style={{ color: Warm.textMuted, fontSize: 12, fontWeight: '700' }}>
+                            • Exited: {new Date(log.actual_exit_at + 'Z').toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </Text>
+                        ) : log.expected_exit_by ? (
+                          <Text style={{ color: Warm.amber, fontSize: 12, fontWeight: '600' }}>
+                            • Exit by: {new Date(log.expected_exit_by + 'Z').toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </Text>
+                        ) : null}
+                      </View>
+                      {log.is_force_approved && (
+                        <Text style={{ color: '#DC2626', fontSize: 11, fontWeight: '700', marginTop: 3 }}>
+                          ⚠ Forced Entry: {log.force_approve_reason || 'No reason provided'}
+                        </Text>
+                      )}
                     </View>
                     <View style={{ backgroundColor: tagBg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
                       <Text style={{ color: tagFg, fontSize: 11, fontWeight: '700', textTransform: 'capitalize' }}>
-                        {log.status || log.approval_status}
+                        {derivedState.replace('_', ' ')}
                       </Text>
                     </View>
                   </View>
@@ -661,6 +920,8 @@ export function ResidentDashboard({ route }: any) {
         </View>
       );
     }
+
+    
 
     if (currentTab === 'history') {
       return (
@@ -677,31 +938,31 @@ export function ResidentDashboard({ route }: any) {
               <Text style={{ color: Warm.text, fontWeight: '700', marginTop: 8 }}>No Visitor Logs Recorded</Text>
             </View>
           )}
-          {logs.map((log: any) => {
-            const getStatusColors = (status: string) => {
-              switch(status.toLowerCase()) {
-                case 'pending':
-                  return { bg: '#FFFBEB', pillBg: '#FEF3C7', text: '#D97706', border: '#FDE68A' };
-                case 'approved':
-                case 'inside':
-                  return { bg: '#F0FDF4', pillBg: '#DCFCE7', text: '#16A34A', border: '#BBF7D0' };
-                case 'denied':
-                case 'rejected':
-                  return { bg: '#FEF2F2', pillBg: '#FEE2E2', text: '#DC2626', border: '#FECACA' };
-                case 'overdue':
-                  return { bg: '#FFF1F2', pillBg: '#FFE4E6', text: '#E11D48', border: '#FECDD3' };
-                default:
-                  return { bg: Warm.cardBg, pillBg: Warm.cardSubtle, text: Warm.textMuted, border: Warm.cardBorder };
-              }
-            };
-            const colors = getStatusColors(log.status);
+          {logs.slice(0, 3).map((log: any) => {
+            const derivedState = log.status === 'expected' && log.approval_status ? log.approval_status : log.status;
+            let cardBg = Warm.cardBg;
+            let cardBorder = Warm.cardBorder;
+            let tagBg = Warm.cardSubtle;
+            let tagFg = Warm.textMuted;
+            
+            switch(derivedState) {
+              case 'pending': cardBg = '#FEF3C7'; cardBorder = '#FDE68A'; tagBg = '#FDE68A'; tagFg = '#92400E'; break;
+              case 'approved': cardBg = '#E0F2FE'; cardBorder = '#BAE6FD'; tagBg = '#BAE6FD'; tagFg = '#0369A1'; break;
+              case 'denied': cardBg = '#FFE4E6'; cardBorder = '#FECDD3'; tagBg = '#FECDD3'; tagFg = '#E11D48'; break;
+              case 'inside': cardBg = '#D1FAE5'; cardBorder = '#A7F3D0'; tagBg = '#A7F3D0'; tagFg = '#059669'; break;
+              case 'overdue': cardBg = '#FEE2E2'; cardBorder = '#FCA5A5'; tagBg = '#FCA5A5'; tagFg = '#DC2626'; break;
+              case 'exited': cardBg = '#F3F4F6'; cardBorder = '#E5E7EB'; tagBg = '#E5E7EB'; tagFg = '#4B5563'; break;
+              case 'unconfirmed_exit': cardBg = '#FFEDD5'; cardBorder = '#FDBA74'; tagBg = '#FDBA74'; tagFg = '#C2410C'; break;
+              case 'cancelled': cardBg = '#F3F4F6'; cardBorder = '#D1D5DB'; tagBg = '#D1D5DB'; tagFg = '#374151'; break;
+              default: break;
+            }
             
             return (
               <View
                 key={log.id}
                 style={{
-                  backgroundColor: colors.bg,
-                  borderColor: colors.border,
+                  backgroundColor: cardBg,
+                  borderColor: cardBorder,
                   borderWidth: 1.5,
                   borderRadius: 16,
                   padding: 16,
@@ -711,24 +972,103 @@ export function ResidentDashboard({ route }: any) {
                   ...Warm.shadow,
                 }}
               >
-                <Avatar name={log.visitor?.name || 'V'} size={42} color={colors.text} />
+                <Avatar name={log.visitor?.name || 'V'} size={42} color={tagFg} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>{log.visitor?.name}</Text>
-                  <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>
-                    {log.purpose} · {new Date(log.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  </Text>
+                  <View style={{ marginTop: 2 }}>
+                    <Text style={{ color: Warm.textMuted, fontSize: 12, marginBottom: 8 }}>
+                      {log.purpose}
+                      {log.expected_exit_by && !log.actual_exit_at ? ` · Exit by: ${new Date(log.expected_exit_by + 'Z').toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : ''}
+                    </Text>
+
+                    {/* Last Action Snippet & Expand Button */}
+                    <TouchableOpacity 
+                      onPress={() => setExpandedLogId(expandedLogId === log.id ? null : log.id)}
+                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: cardBorder, paddingTop: 8 }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {expandedLogId === log.id ? (
+                          <Text style={{ color: Warm.textMuted, fontSize: 11, fontWeight: '700' }}>Activity Log</Text>
+                        ) : log.actual_exit_at ? (
+                          <>
+                            <Text style={{ fontSize: 10 }}>🚪</Text>
+                            <Text style={{ color: Warm.textMuted, fontSize: 11 }}><Text style={{ fontWeight: '700' }}>Exited</Text> at {formatTimestamp(log.actual_exit_at)}</Text>
+                          </>
+                        ) : log.entered_at ? (
+                          <>
+                            <Text style={{ fontSize: 10 }}>🚶</Text>
+                            <Text style={{ color: Warm.textMuted, fontSize: 11 }}><Text style={{ fontWeight: '700' }}>Entered</Text> at {formatTimestamp(log.entered_at)}</Text>
+                          </>
+                        ) : log.approved_at ? (
+                          <>
+                            <Text style={{ fontSize: 10 }}>{log.approval_status === 'approved' ? '✅' : '❌'}</Text>
+                            <Text style={{ color: Warm.textMuted, fontSize: 11 }}><Text style={{ fontWeight: '700' }}>{log.approval_status === 'approved' ? 'Approved' : 'Denied'}</Text> at {formatTimestamp(log.approved_at)}</Text>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={{ fontSize: 10 }}>📝</Text>
+                            <Text style={{ color: Warm.textMuted, fontSize: 11 }}><Text style={{ fontWeight: '700' }}>Logged</Text> at {formatTimestamp(log.created_at)}</Text>
+                          </>
+                        )}
+                      </View>
+                      <Text style={{ color: tagFg, fontSize: 10, fontWeight: '800' }}>
+                        {expandedLogId === log.id ? 'HIDE ▴' : 'DETAILS ▾'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Detailed Activity Timeline */}
+                    {expandedLogId === log.id && (
+                      <View style={{ paddingTop: 8, gap: 4, marginTop: 4 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 10 }}>📝</Text>
+                          <Text style={{ color: Warm.textMuted, fontSize: 11 }}>
+                            <Text style={{ fontWeight: '700' }}>Logged</Text> by {log.approval_source === 'self_checkin' ? 'Visitor (Self)' : (log.guard_name || 'Guard')} at {formatTimestamp(log.created_at)}
+                          </Text>
+                        </View>
+
+                        {log.approved_at && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 10 }}>{log.approval_status === 'approved' ? '✅' : '❌'}</Text>
+                            <Text style={{ color: Warm.textMuted, fontSize: 11 }}>
+                              <Text style={{ fontWeight: '700' }}>{log.approval_status === 'approved' ? 'Approved' : 'Denied'}</Text> by {log.approver_name || 'Resident'} at {formatTimestamp(log.approved_at)}
+                            </Text>
+                          </View>
+                        )}
+
+                        {log.entered_at && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 10 }}>🚶</Text>
+                            <Text style={{ color: Warm.textMuted, fontSize: 11 }}>
+                              <Text style={{ fontWeight: '700' }}>Entered</Text> at {formatTimestamp(log.entered_at)}
+                            </Text>
+                          </View>
+                        )}
+
+                        {log.actual_exit_at && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 10 }}>🚪</Text>
+                            <Text style={{ color: Warm.textMuted, fontSize: 11 }}>
+                              <Text style={{ fontWeight: '700' }}>Exited</Text> at {formatTimestamp(log.actual_exit_at)}
+                              {log.exit_confirmed_by ? ` (Marked by ${log.exit_confirmed_by})` : ''}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                  {log.is_force_approved && (
+                    <Text style={{ color: '#DC2626', fontSize: 11, fontWeight: '700', marginTop: 6 }}>
+                      ⚠ Forced Entry: {log.force_approve_reason || 'No reason provided'}
+                    </Text>
+                  )}
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <View style={{ backgroundColor: colors.pillBg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
-                    <Text style={{ color: colors.text, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' }}>
-                      {log.status}
+                  <View style={{ backgroundColor: tagBg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                    <Text style={{ color: tagFg, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' }}>
+                      {derivedState.replace('_', ' ')}
                     </Text>
                   </View>
-                  {(log.status === 'inside' || log.status === 'overdue') && (
-                    <TouchableOpacity onPress={() => confirmDepart(log.id)} style={{ marginTop: 8 }}>
-                      <Text style={{ color: Warm.accent, fontSize: 12, fontWeight: '700' }}>Departed ➔</Text>
-                    </TouchableOpacity>
-                  )}
                 </View>
               </View>
             );
@@ -859,6 +1199,76 @@ export function ResidentDashboard({ route }: any) {
               </View>
             </View>
           ))}
+
+          <View style={{ marginTop: 30, marginBottom: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: Warm.text }}>My Support Tickets</Text>
+              <Text style={{ fontSize: 12, color: Warm.textMuted, marginTop: 4 }}>
+                Raise issues like plumbing, electrical, or security.
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setModal('create_ticket')}
+              style={{ backgroundColor: Warm.accent, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}
+            >
+              <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 13 }}>+ New</Text>
+            </TouchableOpacity>
+          </View>
+
+          {helpdeskTickets.length === 0 && (
+            <EmptyState icon="📝" title="No Tickets" message="You haven't raised any support tickets." />
+          )}
+
+          {helpdeskTickets.map((t: any) => {
+            const isClosed = t.status === 'resolved' || t.status === 'closed';
+            const isInProgress = t.status === 'in_progress';
+            const bgCol = isClosed ? '#F0FDF4' : isInProgress ? '#FEF3C7' : '#EFF6FF';
+            const borderCol = isClosed ? '#86EFAC' : isInProgress ? '#FDE047' : '#BFDBFE';
+            const badgeColor = isClosed ? 'green' : isInProgress ? 'amber' : 'blue';
+
+            return (
+              <View key={t.id} style={{
+                backgroundColor: bgCol, borderColor: borderCol, borderWidth: 1,
+                borderRadius: 16, padding: 16, marginBottom: 10, ...Warm.shadow,
+              }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1, paddingRight: 10 }}>
+                    <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>{t.title}</Text>
+                    <Text style={{ color: Warm.textMuted, fontSize: 13, marginTop: 4, lineHeight: 18 }}>{t.description}</Text>
+                    {t.comments && (
+                      <View style={{ marginTop: 8, backgroundColor: 'rgba(255,255,255,0.6)', padding: 10, borderRadius: 8 }}>
+                        {(() => {
+                          try {
+                            const logs = JSON.parse(t.comments);
+                            if (Array.isArray(logs)) {
+                              return logs.map((log: any, idx: number) => (
+                                <View key={idx} style={{ marginBottom: idx < logs.length - 1 ? 8 : 0, borderBottomWidth: idx < logs.length - 1 ? 1 : 0, borderBottomColor: Warm.cardBorder, paddingBottom: idx < logs.length - 1 ? 8 : 0 }}>
+                                  <Text style={{ fontSize: 10, fontWeight: '800', color: Warm.textMuted, marginBottom: 2 }}>{log.author?.toUpperCase() || 'ADMIN'} • {formatTimestamp(log.timestamp)}</Text>
+                                  <Text style={{ fontSize: 13, color: Warm.text }}>{log.text}</Text>
+                                </View>
+                              ));
+                            }
+                          } catch {}
+                          return (
+                            <>
+                              <Text style={{ fontSize: 11, fontWeight: '800', color: Warm.textMuted, marginBottom: 2 }}>ADMIN REPLY:</Text>
+                              <Text style={{ fontSize: 13, color: Warm.text }}>{t.comments}</Text>
+                            </>
+                          );
+                        })()}
+                      </View>
+                    )}
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                      <Text style={{ fontSize: 12, color: Warm.textMuted }}>{formatTimestamp(t.created_at)}</Text>
+                    </View>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                    <Badge color={badgeColor}>{t.status.replace('_', ' ')}</Badge>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
         </View>
       );
     }
@@ -1102,6 +1512,20 @@ export function ResidentDashboard({ route }: any) {
             />
           </View>
 
+          {/* Settings Toggle for Guard Force Entry */}
+          <View style={{ marginTop: 12, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 20, borderColor: Warm.cardBorder, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', ...Warm.shadow }}>
+            <View style={{ flex: 1, paddingRight: 16 }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text }}>Allow Guard Force Entry</Text>
+              <Text style={{ fontSize: 13, color: Warm.textMuted, marginTop: 4 }}>Allow the guard to force-approve a waiting visitor if you don't respond within 1 minute.</Text>
+            </View>
+            <Switch
+              value={allowGuardForceEntry}
+              onValueChange={toggleForceEntry}
+              trackColor={{ false: '#E5DFD7', true: Warm.red }}
+              thumbColor={'#FFFFFF'}
+            />
+          </View>
+
           {/* Flat Members Management */}
           {flatMembers.length > 0 && (
             <View style={{ marginTop: 24, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 20, borderColor: Warm.cardBorder, borderWidth: 1, ...Warm.shadow }}>
@@ -1213,6 +1637,23 @@ export function ResidentDashboard({ route }: any) {
           )}
 
           <TouchableOpacity
+            onPress={handleMoveOut}
+            style={{
+              backgroundColor: Warm.red,
+              borderRadius: 16,
+              paddingVertical: 14,
+              alignItems: 'center',
+              marginTop: 20,
+              shadowColor: Warm.red,
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 15 }}>Move Out of Flat</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             onPress={logout}
             style={{
               backgroundColor: Warm.redDim,
@@ -1221,7 +1662,7 @@ export function ResidentDashboard({ route }: any) {
               borderRadius: 16,
               paddingVertical: 14,
               alignItems: 'center',
-              marginTop: 20,
+              marginTop: 10,
             }}
           >
             <Text style={{ color: Warm.red, fontWeight: '800', fontSize: 15 }}>Log Out of Resident Account</Text>
@@ -1370,8 +1811,8 @@ export function ResidentDashboard({ route }: any) {
         elevation: 8,
       }}>
         {[
-          { id: 'dashboard', label: 'Gate', icon: '🛡️' },
-          { id: 'history', label: 'Visitors', icon: '👥' },
+          { id: 'home', label: 'Home', icon: '🏠' },
+                    { id: 'history', label: 'Visitors', icon: '👥' },
           { id: 'passes', label: 'Passes', icon: '🎫' },
           { id: 'services', label: 'Services', icon: '🛠️' },
         ].map((tab) => {
@@ -1412,18 +1853,108 @@ export function ResidentDashboard({ route }: any) {
             Pay via UPI (GPay / PhonePe / Paytm)
           </Btn>
 
-          <Text style={{ color: Warm.textMuted, marginBottom: 8 }}>
-            2. Enter the 12-digit UPI Reference / UTR Number:
-          </Text>
+          {form?.proof_url ? (
+            <View style={{ marginBottom: 16, alignItems: 'center' }}>
+              <Image source={{ uri: form.proof_url }} style={{ width: '100%', height: 200, borderRadius: 12, resizeMode: 'cover' }} />
+              {form?.proof_filename && (
+                <Text style={{ marginTop: 8, fontSize: 13, color: Warm.textMuted, fontWeight: '700' }}>
+                  📎 {form.proof_filename}
+                </Text>
+              )}
+              <TouchableOpacity onPress={() => setForm((prev: any) => ({ ...prev, proof_url: null, proof_filename: null, utr_number: '' }))} style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 20 }}>
+                <Text style={{ color: 'white', fontSize: 12, fontWeight: '800' }}>✕ Remove</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity onPress={handleUploadScreenshot} disabled={ocrLoading} style={{ backgroundColor: Warm.cardSubtle, borderColor: Warm.cardBorder, borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, padding: 20, alignItems: 'center', marginBottom: 16 }}>
+              {ocrLoading ? <ActivityIndicator size="large" color={Warm.accent} style={{ marginBottom: 10 }} /> : <Text style={{ fontSize: 24 }}>📸</Text>}
+              <Text style={{ color: Warm.textMuted, marginTop: 8, fontWeight: '600' }}>
+                {ocrLoading ? 'Scanning image for UTR Code...' : 'Upload Payment Screenshot'}
+              </Text>
+              <Text style={{ color: Warm.textDim, fontSize: 11, marginTop: 4, textAlign: 'center' }}>
+                We will automatically extract the UTR code
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {!form?.utr_number ? (
+            <View>
+              <Text style={{ color: Warm.textMuted, marginBottom: 8 }}>
+                Or manually enter the 12-digit UPI Reference / UTR Number:
+              </Text>
+              <Input
+                label="UTR / Reference Number *"
+                placeholder="e.g. 329182371928"
+                value={form?.utr_number || ''}
+                onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), utr_number: v }))}
+              />
+              <Btn full variant="green" onClick={submitRenewal} style={{ marginTop: 8 }} disabled={!form?.utr_number}>
+                Submit Proof for Approval →
+              </Btn>
+            </View>
+          ) : (
+            <Btn full variant="green" onClick={submitRenewal} style={{ marginTop: 8 }}>
+              ✓ Confirm UTR {form.utr_number} & Submit
+            </Btn>
+          )}
+        </Modal>
+      )}
+
+      {/* ── Donation Modal ── */}
+      {modal?.type === 'donate' && (
+        <Modal title="Society Donation" subtitle="Support your community welfare" onClose={() => setModal(null)}>
           <Input
-            label="UTR / Reference Number *"
-            placeholder="e.g. 329182371928"
-            value={form?.utr_number || ''}
-            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), utr_number: v }))}
+            label="Donation Amount (₹)"
+            placeholder="e.g. 500"
+            value={form?.amount || '500'}
+            keyboardType="number-pad"
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), amount: v }))}
           />
-          <Btn full variant="green" onClick={submitRenewal} style={{ marginTop: 8 }}>
-            Submit Proof for Approval →
+          <Btn variant="blue" full onClick={() => openUPI(parseFloat(form?.amount || '500'))} style={{ marginBottom: 20 }}>
+            Pay via UPI (GPay / PhonePe / Paytm)
           </Btn>
+
+          {form?.proof_url ? (
+            <View style={{ marginBottom: 16, alignItems: 'center' }}>
+              <Image source={{ uri: form.proof_url }} style={{ width: '100%', height: 200, borderRadius: 12, resizeMode: 'cover' }} />
+              {form?.proof_filename && (
+                <Text style={{ marginTop: 8, fontSize: 13, color: Warm.textMuted, fontWeight: '700' }}>
+                  📎 {form.proof_filename}
+                </Text>
+              )}
+              <TouchableOpacity onPress={() => setForm((prev: any) => ({ ...prev, proof_url: null, proof_filename: null, utr_number: '' }))} style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.5)', padding: 6, borderRadius: 20 }}>
+                <Text style={{ color: 'white', fontSize: 12, fontWeight: '800' }}>✕ Remove</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity onPress={handleUploadScreenshot} disabled={ocrLoading} style={{ backgroundColor: Warm.cardSubtle, borderColor: Warm.cardBorder, borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, padding: 20, alignItems: 'center', marginBottom: 16 }}>
+              {ocrLoading ? <ActivityIndicator size="large" color={Warm.accent} style={{ marginBottom: 10 }} /> : <Text style={{ fontSize: 24 }}>📸</Text>}
+              <Text style={{ color: Warm.textMuted, marginTop: 8, fontWeight: '600' }}>
+                {ocrLoading ? 'Scanning image for UTR Code...' : 'Upload Payment Screenshot'}
+              </Text>
+              <Text style={{ color: Warm.textDim, fontSize: 11, marginTop: 4, textAlign: 'center' }}>
+                We will automatically extract the UTR code
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {!form?.utr_number ? (
+            <View>
+              <Input
+                label="UTR / Reference Number *"
+                placeholder="e.g. 329182371928"
+                value={form?.utr_number || ''}
+                onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), utr_number: v }))}
+              />
+              <Btn full variant="green" onClick={submitDonation} style={{ marginTop: 8 }} disabled={!form?.utr_number}>
+                Submit Donation →
+              </Btn>
+            </View>
+          ) : (
+            <Btn full variant="green" onClick={submitDonation} style={{ marginTop: 8 }}>
+              ✓ Confirm UTR {form.utr_number} & Submit
+            </Btn>
+          )}
         </Modal>
       )}
 
@@ -1503,6 +2034,49 @@ export function ResidentDashboard({ route }: any) {
           )}
           <Btn full variant="green" onClick={createPre} style={{ marginTop: 16 }}>
             Issue Gate Pass →
+          </Btn>
+        </Modal>
+      )}
+
+      {modal === 'create_ticket' && (
+        <Modal visible onClose={() => { setModal(null); setForm({}); }} title="Raise Support Ticket">
+          <Input
+            label="Issue Title *"
+            placeholder="e.g. Broken streetlight near block A"
+            value={form?.title || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), title: v }))}
+          />
+          <Input
+            label="Description *"
+            placeholder="Please describe the issue in detail"
+            value={form?.description || ''}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), description: v }))}
+            multiline
+          />
+          <Select
+            label="Category"
+            value={form?.category || 'other'}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), category: v }))}
+            options={[
+              { value: 'plumbing', label: '🚰 Plumbing' },
+              { value: 'electrical', label: '⚡ Electrical' },
+              { value: 'cleaning', label: '🧹 Cleaning / Janitorial' },
+              { value: 'security', label: '🛡️ Security' },
+              { value: 'other', label: '📋 Other' },
+            ]}
+          />
+          <Select
+            label="Priority"
+            value={form?.priority || 'medium'}
+            onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), priority: v }))}
+            options={[
+              { value: 'low', label: '🟢 Low' },
+              { value: 'medium', label: '🟡 Medium' },
+              { value: 'high', label: '🔴 High (Urgent)' },
+            ]}
+          />
+          <Btn full variant="primary" onClick={createTicket} style={{ marginTop: 16 }}>
+            Submit Ticket
           </Btn>
         </Modal>
       )}
