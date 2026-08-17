@@ -7,6 +7,7 @@ Includes multi-tenancy scoping by society_id across all tenant models.
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 from app.repositories.base import BaseRepository
 from app.models import (
     Society, SocietyAdmin, User, Flat, FlatUser, Guard, Visitor, VisitorLog,
@@ -336,28 +337,32 @@ class VisitorLogRepository(BaseRepository):
         super().__init__(VisitorLog, db)
 
     def get_pending_for_flat(self, flat_id: int) -> List[VisitorLog]:
-        return self.db.query(VisitorLog).filter_by(
+        # ⚡ Bolt Optimization: Added joinedload for visitor and flat relationships to prevent N+1 queries during to_dict serialization
+        return self.db.query(VisitorLog).options(joinedload(VisitorLog.visitor), joinedload(VisitorLog.flat)).filter_by(
             flat_id=flat_id,
             approval_status="pending"
         ).order_by(VisitorLog.created_at.desc()).all()
 
     def get_inside(self, society_id: int = None) -> List[VisitorLog]:
         """Everyone currently inside the society."""
-        q = self.db.query(VisitorLog).filter_by(status="inside")
+        # ⚡ Bolt Optimization: Added joinedload for visitor and flat relationships to prevent N+1 queries during to_dict serialization
+        q = self.db.query(VisitorLog).options(joinedload(VisitorLog.visitor), joinedload(VisitorLog.flat)).filter_by(status="inside")
         if society_id:
             q = q.filter_by(society_id=society_id)
         return q.all()
 
     def get_inside_for_gate(self, gate_id: int) -> List[VisitorLog]:
         """Visitors expected to exit from a specific gate."""
-        return self.db.query(VisitorLog).filter_by(
+        # ⚡ Bolt Optimization: Added joinedload for visitor and flat relationships to prevent N+1 queries during to_dict serialization
+        return self.db.query(VisitorLog).options(joinedload(VisitorLog.visitor), joinedload(VisitorLog.flat)).filter_by(
             status="inside",
             expected_exit_gate_id=gate_id
         ).all()
 
     def get_overdue(self, society_id: int = None) -> List[VisitorLog]:
         """Visitors whose expected exit time has passed."""
-        q = self.db.query(VisitorLog).filter(
+        # ⚡ Bolt Optimization: Added joinedload for visitor and flat relationships to prevent N+1 queries during to_dict serialization
+        q = self.db.query(VisitorLog).options(joinedload(VisitorLog.visitor), joinedload(VisitorLog.flat)).filter(
             VisitorLog.status == "inside",
             VisitorLog.expected_exit_by < datetime.utcnow()
         )
@@ -366,20 +371,23 @@ class VisitorLogRepository(BaseRepository):
         return q.all()
 
     def get_by_flat(self, flat_id: int, page: int = 1, per_page: int = 20):
-        q = self.db.query(VisitorLog).filter_by(flat_id=flat_id).order_by(
+        # ⚡ Bolt Optimization: Added joinedload for visitor and flat relationships to prevent N+1 queries during to_dict serialization
+        q = self.db.query(VisitorLog).options(joinedload(VisitorLog.visitor), joinedload(VisitorLog.flat)).filter_by(flat_id=flat_id).order_by(
             VisitorLog.created_at.desc()
         )
         return self.paginate(page=page, per_page=per_page, query=q)
 
     def get_today_for_gate(self, gate_id: int) -> List[VisitorLog]:
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        return self.db.query(VisitorLog).filter(
+        # ⚡ Bolt Optimization: Added joinedload for visitor and flat relationships to prevent N+1 queries during to_dict serialization
+        return self.db.query(VisitorLog).options(joinedload(VisitorLog.visitor), joinedload(VisitorLog.flat)).filter(
             VisitorLog.entry_gate_id == gate_id,
             VisitorLog.created_at >= today_start
         ).order_by(VisitorLog.created_at.desc()).all()
 
     def get_all_filtered(self, filters: dict, page: int = 1, per_page: int = 20, society_id: int = None):
-        q = self.db.query(VisitorLog)
+        # ⚡ Bolt Optimization: Added joinedload for visitor and flat relationships to prevent N+1 queries during to_dict serialization
+        q = self.db.query(VisitorLog).options(joinedload(VisitorLog.visitor), joinedload(VisitorLog.flat))
         target_society_id = society_id or filters.get("society_id")
         if target_society_id:
             q = q.filter_by(society_id=target_society_id)
