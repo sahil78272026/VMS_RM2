@@ -49,13 +49,16 @@ export default function App() {
 
   useEffect(() => {
     if (form.visitor_phone && form.visitor_phone.length === 10) {
-      fetch(`${API_BASE}/visitors?q=${form.visitor_phone}`)
+      fetch(`${API_BASE}/visitors/lookup/${form.visitor_phone}`)
         .then(r => r.json())
         .then(d => {
-          const items = d.data?.items || d.data || [];
-          const match = items.find((v: any) => v.phone === form.visitor_phone);
-          if (match && !form.visitor_name) {
-            setForm(p => ({ ...p, visitor_name: match.name }));
+          const visitor = d.data;
+          if (visitor && !form.visitor_name) {
+            setForm(p => ({ 
+              ...p, 
+              visitor_name: visitor.name,
+              vehicle_number: visitor.vehicle_number || p.vehicle_number 
+            }));
           }
         })
         .catch(() => {});
@@ -294,31 +297,8 @@ export default function App() {
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           
-          <div className="form-group" style={{ textAlign: 'center' }}>
-            <label>Visitor Photo</label>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-              {form.photo_base64 ? (
-                <img src={form.photo_base64} alt="Visitor" style={{ width: 120, height: 120, borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--accent)', boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)' }} />
-              ) : (
-                <div style={{ width: 120, height: 120, borderRadius: '50%', backgroundColor: 'var(--bg-secondary)', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>
-                  📷
-                </div>
-              )}
-              <button type="button" onClick={startCamera} className="btn btn-outline" style={{ cursor: 'pointer', display: 'inline-block' }}>
-                {form.photo_base64 ? 'Retake Selfie' : 'Take Selfie'}
-              </button>
-            </div>
-            {error === 'Please provide a photo' && (
-              <div style={{ color: '#ef4444', fontSize: 12, marginTop: 8, fontWeight: 500 }}>{error}</div>
-            )}
-          </div>
-
           <div className="form-group">
-            <label>Your Name</label>
-            <input required placeholder="Full Name" value={form.visitor_name} onChange={e => set('visitor_name')(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label>Phone Number</label>
+            <label>Phone Number *</label>
             <input required type="tel" maxLength={10} placeholder="10-digit Mobile Number" value={form.visitor_phone} onChange={e => {
               const val = e.target.value.replace(/[^0-9]/g, '');
               set('visitor_phone')(val);
@@ -327,53 +307,82 @@ export default function App() {
               <div style={{ color: '#ef4444', fontSize: 12, marginTop: 4, fontWeight: 500 }}>{error}</div>
             )}
           </div>
-          <div className="form-group">
-            <label>Flats to Visit</label>
-            <MultiSearchableSelect 
-              value={form.flat_ids} 
-              onChange={(v: string[]) => setForm(p => ({ ...p, flat_ids: v }))}
-              options={flats.map(f => ({ value: f.id.toString(), label: `Flat ${f.flat_number}`, style: getFlatStyle(f.flat_number) }))}
-              placeholder="Select Flats..."
-            />
-          </div>
 
-          <div className="form-group">
-            <label>Number of People</label>
-            <select required value={form.visitor_count} onChange={e => set('visitor_count')(e.target.value)}>
-              <option value="1">1 Person (Just me)</option>
-              <option value="2">2 People</option>
-              <option value="3">3 People</option>
-              <option value="4">4 People</option>
-              <option value="5">5+ People</option>
-            </select>
-          </div>
+          {form.visitor_phone && form.visitor_phone.length === 10 && (
+            <>
+              <div className="form-group" style={{ textAlign: 'center' }}>
+                <label>Visitor Selfie *</label>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                  {form.photo_base64 ? (
+                    <img src={form.photo_base64} alt="Visitor" style={{ width: 120, height: 120, borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--accent)', boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)' }} />
+                  ) : (
+                    <div style={{ width: 120, height: 120, borderRadius: '50%', backgroundColor: 'var(--bg-secondary)', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>
+                      📷
+                    </div>
+                  )}
+                  <button type="button" onClick={startCamera} className="btn btn-outline" style={{ cursor: 'pointer', display: 'inline-block' }}>
+                    {form.photo_base64 ? 'Retake Selfie' : 'Take Selfie'}
+                  </button>
+                </div>
+                {error === 'Please provide a photo' && (
+                  <div style={{ color: '#ef4444', fontSize: 12, marginTop: 8, fontWeight: 500 }}>{error}</div>
+                )}
+              </div>
 
-          <div className="form-group">
-            <label>Purpose</label>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {['Guest','Delivery','Service','Interview'].map(p => (
-                <button key={p} type="button" onClick={() => set('purpose')(p)} className={`btn-pill ${form.purpose === p ? 'active' : ''}`}>
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
+              {form.photo_base64 && (
+                <>
+                  <div className="form-group">
+                    <label>Your Name *</label>
+                    <input required placeholder="Full Name" value={form.visitor_name} onChange={e => set('visitor_name')(e.target.value)} />
+                  </div>
 
-          <div className="form-group">
-            <label>Arriving by?</label>
-            <select value={form.entry_mode} onChange={e => set('entry_mode')(e.target.value)}>
-              <option value="foot">On Foot</option>
-              <option value="two_wheeler">Two Wheeler</option>
-              <option value="four_wheeler">Four Wheeler (Car)</option>
-            </select>
-          </div>
+                  <div className="form-group">
+                    <label>Flats to Visit *</label>
+                    <MultiSearchableSelect 
+                      value={form.flat_ids} 
+                      onChange={(v: string[]) => setForm(p => ({ ...p, flat_ids: v }))}
+                      options={flats.map(f => ({ value: f.id.toString(), label: `Flat ${f.flat_number}`, style: getFlatStyle(f.flat_number) }))}
+                      placeholder="Select Flats..."
+                    />
+                  </div>
 
-          {form.entry_mode !== 'foot' && (
-            <div className="form-group">
-              <label>Vehicle Number (Optional)</label>
-              <input placeholder="e.g. KA01AB1234" value={form.vehicle_number} onChange={e => set('vehicle_number')(e.target.value)} />
-            </div>
-          )}
+                  <div className="form-group">
+                    <label>Number of People</label>
+                    <select required value={form.visitor_count} onChange={e => set('visitor_count')(e.target.value)}>
+                      <option value="1">1 Person (Just me)</option>
+                      <option value="2">2 People</option>
+                      <option value="3">3 People</option>
+                      <option value="4">4 People</option>
+                      <option value="5">5+ People</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Purpose</label>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {['Guest','Delivery','Service','Interview'].map(p => (
+                        <button key={p} type="button" onClick={() => set('purpose')(p)} className={`btn-pill ${form.purpose === p ? 'active' : ''}`}>
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Arriving by?</label>
+                    <select value={form.entry_mode} onChange={e => set('entry_mode')(e.target.value)}>
+                      <option value="foot">On Foot</option>
+                      <option value="two_wheeler">Two Wheeler</option>
+                      <option value="four_wheeler">Four Wheeler (Car)</option>
+                    </select>
+                  </div>
+
+                  {form.entry_mode !== 'foot' && (
+                    <div className="form-group">
+                      <label>Vehicle Number (Optional)</label>
+                      <input placeholder="e.g. KA01AB1234" value={form.vehicle_number} onChange={e => set('vehicle_number')(e.target.value)} />
+                    </div>
+                  )}
 
           <div className="form-group">
             <label>Expected Stay Duration</label>
@@ -385,10 +394,16 @@ export default function App() {
               <option value="overnight">Overnight</option>
             </select>
           </div>
+                </>
+              )}
+            </>
+          )}
 
-          <button type="submit" disabled={loading} className="btn btn-primary w-full" style={{ marginTop: '1rem' }}>
-            {loading ? 'Submitting...' : 'Submit Request'}
-          </button>
+          {form.visitor_phone && form.visitor_phone.length === 10 && form.photo_base64 && (
+            <button type="submit" disabled={loading} className="btn btn-primary w-full" style={{ marginTop: '1rem' }}>
+              {loading ? 'Submitting...' : 'Submit Request'}
+            </button>
+          )}
         </form>
       </div>
     </div>

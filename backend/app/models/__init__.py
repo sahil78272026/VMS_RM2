@@ -393,7 +393,7 @@ class VisitorLog(Base):
 
     # Approval
     approval_source       = Column(Enum("guard_initiated", "self_checkin", name="approval_source"), nullable=False)
-    approval_status       = Column(Enum("pending", "approved", "denied", name="approval_status"), default="pending", nullable=False)
+    approval_status       = Column(Enum("pending", "approved", "denied", "not_answered", name="approval_status"), default="pending", nullable=False)
     approved_by           = Column(Integer, ForeignKey("flat_users.id"), nullable=True)
     approved_at           = Column(DateTime, nullable=True)
 
@@ -482,7 +482,7 @@ class PreApproval(Base):
     visitor_name    = Column(String(150), nullable=False)
     visitor_phone   = Column(String(20), nullable=False)
     valid_from      = Column(DateTime, nullable=False)
-    valid_until     = Column(DateTime, nullable=False)
+
     purpose         = Column(String(200), nullable=True)
     is_recurring    = Column(Boolean, default=False, nullable=False)
     recurrence_rule = Column(String(50), nullable=True)
@@ -502,7 +502,6 @@ class PreApproval(Base):
             "visitor_name":    self.visitor_name,
             "visitor_phone":   self.visitor_phone,
             "valid_from":      self.valid_from.isoformat(),
-            "valid_until":     self.valid_until.isoformat(),
             "purpose":         self.purpose,
             "is_recurring":    self.is_recurring,
             "recurrence_rule": self.recurrence_rule,

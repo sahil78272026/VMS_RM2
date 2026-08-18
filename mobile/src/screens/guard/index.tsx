@@ -180,12 +180,15 @@ export function GuardDashboard({ navigation }: any) {
     if (form.visitor_phone && form.visitor_phone.length === 10) {
       const fetchVisitor = async () => {
         try {
-          const res = await api.get(`/visitors?q=${form.visitor_phone}`);
-          const visitors = res.data?.data || [];
-          const match = visitors.find((v: any) => v.phone === form.visitor_phone);
-          if (match && !form.visitor_name) {
-            setForm((prev: any) => ({ ...prev, visitor_name: match.name }));
-            Toast.show({ type: 'success', text1: 'Visitor Found', text2: `Welcome back, ${match.name}!` });
+          const res = await api.get(`/visitors/lookup/${form.visitor_phone}`);
+          const visitor = res.data?.data;
+          if (visitor && !form.visitor_name) {
+            setForm((prev: any) => ({ 
+              ...prev, 
+              visitor_name: visitor.name,
+              vehicle_number: visitor.vehicle_number || prev.vehicle_number
+            }));
+            Toast.show({ type: 'success', text1: 'Visitor Found', text2: `Welcome back, ${visitor.name}!` });
           }
         } catch (e) {}
       };
@@ -290,6 +293,7 @@ export function GuardDashboard({ navigation }: any) {
       aspect: [1, 1],
       quality: 0.5,
       base64: true,
+      cameraType: ImagePicker.CameraType.back,
     });
 
     if (!result.canceled && result.assets[0].base64) {
@@ -680,71 +684,77 @@ export function GuardDashboard({ navigation }: any) {
               Register Walk-in Visitor
             </Text>
             <Input
-              label="Visitor Full Name *"
-              placeholder="e.g. Ramesh Kumar"
-              value={form.visitor_name || ''}
-              onChange={(v: string) => setForm({ ...form, visitor_name: v })}
-              icon="👤"
-            />
-            <Input
               label="Phone Number *"
-              placeholder="98765 43210"
+              placeholder="10-digit mobile number"
               maxLength={10}
               keyboardType="number-pad"
               value={form.visitor_phone || ''}
               onChange={(v: string) => setForm({ ...form, visitor_phone: v.replace(/[^0-9]/g, '') })}
               icon="📞"
             />
-            {form.photo_uri ? (
-              <View style={{ alignItems: 'center', marginVertical: 12 }}>
-                <Image source={{ uri: form.photo_uri }} style={{ width: 100, height: 100, borderRadius: 50, borderWidth: 2, borderColor: Warm.accent }} />
-                <Text style={{ color: Warm.green, fontWeight: '700', marginTop: 8 }}>✓ Photo Captured</Text>
-                <TouchableOpacity onPress={() => setForm({ ...form, photo_base64: null, photo_uri: null })}>
-                  <Text style={{ color: Warm.red, fontSize: 12, marginTop: 4, fontWeight: '700' }}>Remove Photo</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                onPress={takePhoto}
-                style={{
-                  backgroundColor: '#F8FAFC',
-                  borderColor: '#CBD5E1',
-                  borderWidth: 1.5,
-                  borderStyle: 'dashed',
-                  borderRadius: 14,
-                  padding: 16,
-                  alignItems: 'center',
-                  marginVertical: 12,
-                }}
-              >
-                <Text style={{ fontSize: 24, marginBottom: 8 }}>📷</Text>
-                <Text style={{ color: Warm.textMuted, fontWeight: '600' }}>Capture Visitor Photo (Optional)</Text>
-              </TouchableOpacity>
-            )}
-            <MultiSearchableSelect
-              label="Flats to Visit *"
-              value={form.flat_ids || []}
-              onChange={(v: string[]) => setForm({ ...form, flat_ids: v })}
-              options={flats.map((f: any) => ({
-                value: f.id.toString(),
-                label: `Flat ${f.flat_number}`,
-                color: getFlatColor(f.flat_number),
-              }))}
-              placeholder="Select destination flats..."
-            />
-            <Select
-              label="Purpose of Entry"
-              value={form.purpose || 'Guest'}
-              onChange={(v: string) => setForm({ ...form, purpose: v })}
-              options={[
-                { value: 'Guest', label: 'Guest / Family' },
-                { value: 'Delivery', label: 'Delivery' },
-                { value: 'Cab', label: 'Cab Pickup / Drop' },
-                { value: 'Service', label: 'Maintenance / Daily Help' },
-                { value: 'Other', label: 'Other' },
-              ]}
-            />
-            <Select
+
+            {form.visitor_phone && form.visitor_phone.length === 10 && (
+              <>
+                {!form.photo_uri ? (
+                  <TouchableOpacity
+                    onPress={takePhoto}
+                    style={{
+                      backgroundColor: '#F8FAFC',
+                      borderColor: '#CBD5E1',
+                      borderWidth: 1.5,
+                      borderStyle: 'dashed',
+                      borderRadius: 14,
+                      padding: 16,
+                      alignItems: 'center',
+                      marginVertical: 12,
+                    }}
+                  >
+                    <Text style={{ fontSize: 24, marginBottom: 8 }}>📷</Text>
+                    <Text style={{ color: Warm.textMuted, fontWeight: '600' }}>Tap to Take Photo</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={{ alignItems: 'center', marginVertical: 12 }}>
+                    <Image source={{ uri: form.photo_uri }} style={{ width: 100, height: 100, borderRadius: 50, borderWidth: 2, borderColor: Warm.accent }} />
+                    <Text style={{ color: Warm.green, fontWeight: '700', marginTop: 8 }}>✓ Photo Captured</Text>
+                    <TouchableOpacity onPress={() => setForm({ ...form, photo_base64: null, photo_uri: null })}>
+                      <Text style={{ color: Warm.red, fontSize: 12, marginTop: 4, fontWeight: '700' }}>Retake Photo</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {form.photo_uri && (
+                  <>
+                    <Input
+                      label="Visitor Full Name *"
+                      placeholder="e.g. Ramesh Kumar"
+                      value={form.visitor_name || ''}
+                      onChange={(v: string) => setForm({ ...form, visitor_name: v })}
+                      icon="👤"
+                    />
+                    <MultiSearchableSelect
+                      label="Flats to Visit *"
+                      value={form.flat_ids || []}
+                      onChange={(v: string[]) => setForm({ ...form, flat_ids: v })}
+                      options={flats.map((f: any) => ({
+                        value: f.id.toString(),
+                        label: `Flat ${f.flat_number}`,
+                        color: getFlatColor(f.flat_number),
+                      }))}
+                      placeholder="Select destination flats..."
+                    />
+                    <Select
+                      label="Purpose of Entry"
+                      value={form.purpose || 'Guest'}
+                      onChange={(v: string) => setForm({ ...form, purpose: v })}
+                      options={[
+                        { value: 'Guest', label: 'Guest / Family' },
+                        { value: 'Delivery', label: 'Delivery' },
+                        { value: 'Cab', label: 'Cab Pickup / Drop' },
+                        { value: 'Service', label: 'Maintenance / Daily Help' },
+                        { value: 'Other', label: 'Other' },
+                      ]}
+                    />
+                    <Select
               label="Mode of Entry"
               value={form.entry_mode || 'foot'}
               onChange={(v: string) => setForm({ ...form, entry_mode: v })}
@@ -779,6 +789,10 @@ export function GuardDashboard({ navigation }: any) {
                 Notify Resident & Log Entry →
               </Text>
             </TouchableOpacity>
+                  </>
+                )}
+              </>
+            )}
           </View>
         </View>
       );

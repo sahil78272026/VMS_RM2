@@ -39,6 +39,32 @@ async def search_visitors(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         return error("Failed to search visitors", "SERVER_ERROR", str(e), 500)
 
+@router.get("/lookup/{phone_number}")
+async def lookup_visitor(phone_number: str, db: Session = Depends(get_db)):
+    """
+    Visitor self-checkin/Guard: silently lookup if a visitor exists by phone.
+    Returns name and vehicle number if they exist.
+    """
+    try:
+        from app.models import Visitor, VisitorLog
+        visitor = db.query(Visitor).filter(Visitor.phone == phone_number).first()
+        if not visitor:
+            return success("No visitor found", data=None)
+        
+        latest_log = db.query(VisitorLog).filter(VisitorLog.visitor_id == visitor.id).order_by(VisitorLog.created_at.desc()).first()
+        vehicle_num = latest_log.vehicle_number if latest_log else ""
+        
+        return success(
+            "Visitor found", 
+            data={
+                "name": visitor.name,
+                "vehicle_number": vehicle_num,
+                "id": visitor.id
+            }
+        )
+    except Exception as e:
+        return error("Failed to lookup visitor", "SERVER_ERROR", str(e), 500)
+
 
 @router.get("/{visitor_id}")
 async def get_visitor(visitor_id: int, request: Request, db: Session = Depends(get_db)):

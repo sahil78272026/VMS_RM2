@@ -95,12 +95,28 @@ async def get_pending(request: Request, db: Session = Depends(get_db), current_u
         if not guard:
             return error("Guard profile not found", "NOT_FOUND", status_code=404)
             
-        pending = db.query(VisitorLog).filter(
+        from datetime import datetime, timedelta
+        
+        pending_records = db.query(VisitorLog).filter(
             VisitorLog.society_id == guard.society_id,
             VisitorLog.status.in_(["pending", "approved", "denied"])
         ).order_by(VisitorLog.created_at.desc()).all()
         
-        return success("Pending approvals", data=[l.to_dict() for l in pending])
+        # Lazy Expiry: Check if any pending request is > 30 mins old
+        now = datetime.utcnow()
+        thirty_mins_ago = now - timedelta(minutes=30)
+        
+        updated = False
+        for log in pending_records:
+            if log.status == "pending" and log.approval_status == "pending" and log.created_at < thirty_mins_ago:
+                log.approval_status = "not_answered"
+                log.status = "denied"
+                updated = True
+                
+        if updated:
+            db.commit()
+            
+        return success("Pending approvals", data=[l.to_dict() for l in pending_records])
     except Exception as e:
         return error("Failed to fetch pending", "SERVER_ERROR", str(e), 500)
 
@@ -242,7 +258,22 @@ async def get_my_pending(request: Request, db: Session = Depends(get_db), curren
             return error("Flat not found", "NOT_FOUND", status_code=404)
 
         logs = vl_service.get_pending_for_flat(flat_user.flat_id)
-        return success("Pending approvals", data=[l.to_dict() for l in logs])
+        
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        thirty_mins_ago = now - timedelta(minutes=30)
+        
+        updated = False
+        for log in logs:
+            if log.status == "pending" and log.approval_status == "pending" and log.created_at < thirty_mins_ago:
+                log.approval_status = "not_answered"
+                log.status = "denied"
+                updated = True
+                
+        if updated:
+            db.commit()
+            
+        return success("Pending approvals", data=[l.to_dict() for l in logs if l.status == "pending"])
     except Exception as e:
         return error("Failed to fetch", "SERVER_ERROR", str(e), 500)
 

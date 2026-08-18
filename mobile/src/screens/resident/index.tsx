@@ -389,12 +389,10 @@ export function ResidentDashboard({ route }: any) {
   };
 
   const openQuickPass = (purpose: string) => {
-    const today = new Date().toISOString().split('T')[0];
     setForm({
       visitor_name: purpose === 'Delivery' ? 'Delivery Agent' : purpose === 'Cab' ? 'Cab Driver' : purpose === 'Service' ? 'Home Help / Service' : '',
       visitor_phone: '9999999999',
       purpose: purpose,
-      valid_until: today,
     });
     setModal({ type: 'pre', defaultPurpose: purpose });
   };
@@ -421,15 +419,14 @@ export function ResidentDashboard({ route }: any) {
   };
 
   const createPre = async () => {
-    if (!form.visitor_name || !form.valid_until) {
-      return Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter visitor name and valid until date' });
+    if (!form.visitor_name) {
+      return Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter visitor name' });
     }
     try {
       await PreApprovalService.create({
         visitor_name: form.visitor_name,
         visitor_phone: form.visitor_phone || '9999999999',
         purpose: form.purpose || 'Guest',
-        valid_until: form.valid_until,
       });
       setModal(null);
       load();
@@ -744,7 +741,7 @@ export function ResidentDashboard({ route }: any) {
             <TouchableOpacity
               activeOpacity={0.85}
               onPress={() => {
-                setForm({ purpose: 'Guest', entry_mode: 'foot', valid_until: new Date().toISOString().split('T')[0] });
+                setForm({ purpose: 'Guest', entry_mode: 'foot' });
                 setModal({ type: 'pre' });
               }}
               style={{
@@ -1081,7 +1078,7 @@ export function ResidentDashboard({ route }: any) {
       return (
         <View>
           <TouchableOpacity
-            onPress={() => { setForm({ purpose: 'Guest', entry_mode: 'foot', valid_until: new Date().toISOString().split('T')[0] }); setModal({ type: 'pre' }); }}
+            onPress={() => { setForm({ purpose: 'Guest', entry_mode: 'foot' }); setModal({ type: 'pre' }); }}
             style={{
               backgroundColor: Warm.accent,
               borderRadius: 16,
@@ -1125,9 +1122,6 @@ export function ResidentDashboard({ route }: any) {
               <View style={{ flex: 1 }}>
                 <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 16 }}>{pa.visitor_name}</Text>
                 <Text style={{ color: Warm.textMuted, fontSize: 13, marginTop: 2 }}>{pa.visitor_phone} · {pa.purpose || 'Guest'}</Text>
-                <Text style={{ color: Warm.textDim, fontSize: 11, marginTop: 4 }}>
-                  Valid until {formatDate(pa.valid_until)}
-                </Text>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
                 <View style={{ backgroundColor: pa.status === 'active' ? Warm.greenDim : Warm.redDim, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
@@ -2009,28 +2003,6 @@ export function ResidentDashboard({ route }: any) {
               icon="🚗"
               autoCapitalize="characters"
             />
-          )}
-          <Text style={{ color: Warm.text, fontWeight: '700', fontSize: 14, marginTop: 12, marginBottom: 8, textTransform: 'uppercase' }}>
-            Valid Until Date *
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Warm.cardSubtle, borderColor: Warm.cardBorder, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12 }}>
-            <Text style={{ flex: 1, fontSize: 15, color: form?.valid_until ? Warm.text : Warm.textMuted }}>
-              {form?.valid_until ? formatDate(form.valid_until) : 'Select Date'}
-            </Text>
-            <TouchableOpacity onPress={() => setShowCalendar(!showCalendar)}>
-              <Text style={{ fontSize: 20 }}>📅</Text>
-            </TouchableOpacity>
-          </View>
-          {showCalendar && (
-            <View style={{ marginBottom: 12 }}>
-              <Calendar
-                value={form?.valid_until || ''}
-                onChange={(v: string) => {
-                  setForm((prev: any) => ({ ...(prev || {}), valid_until: v }));
-                  setShowCalendar(false);
-                }}
-              />
-            </View>
           )}
           <Btn full variant="green" onClick={createPre} style={{ marginTop: 16 }}>
             Issue Gate Pass →
