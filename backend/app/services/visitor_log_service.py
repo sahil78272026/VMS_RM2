@@ -237,14 +237,19 @@ class VisitorLogService:
             raise ValidationError({"flat_ids": "Must be integers"})
 
         flats = []
+        missing_residents = []
         for fid in flat_ids:
             flat = self.flat_repo.get_by_id(fid)
             if not flat:
                 raise NotFoundError(f"Flat ID {fid}")
             flat_user = self.flat_user_repo.get_primary_by_flat(fid)
             if not flat_user:
-                raise NotFoundError(f"Resident for flat {fid}")
-            flats.append((flat, flat_user))
+                missing_residents.append(flat.flat_number)
+            else:
+                flats.append((flat, flat_user))
+
+        if missing_residents:
+            raise NotFoundError(f"No resident registered for flat(s): {', '.join(missing_residents)}")
 
         society_id = flats[0][0].society_id
 

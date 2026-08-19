@@ -592,53 +592,7 @@ export function ResidentDashboard({ route }: any) {
           )}
 
           {/* Donation Quick Action */}
-          <TouchableOpacity
-            onPress={() => {
-              setForm({ amount: '500', purpose: 'Society Welfare Fund' });
-              setModal({ type: 'donate' });
-            }}
-            style={{
-              marginBottom: 20,
-              backgroundColor: '#F0F9FF',
-              borderColor: '#BAE6FD',
-              borderWidth: 1.5,
-              borderRadius: 20,
-              padding: 18,
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              ...Warm.shadow,
-            }}
-          >
-            <View style={{ flex: 1, marginRight: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 18 }}>❤️</Text>
-                <Text style={{ fontSize: 13, color: '#0369A1', textTransform: 'uppercase', fontWeight: '800', letterSpacing: 0.5 }}>
-                  Society Welfare
-                </Text>
-              </View>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginTop: 4 }}>
-                Donate for Community
-              </Text>
-              <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>
-                Support local events and maintenance
-              </Text>
-            </View>
-            <View style={{
-              backgroundColor: '#0EA5E9',
-              borderRadius: 12,
-              paddingVertical: 10,
-              paddingHorizontal: 16,
-              shadowColor: '#0EA5E9',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.2,
-              shadowRadius: 4,
-            }}>
-              <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>
-                Donate →
-              </Text>
-            </View>
-          </TouchableOpacity>
+
 
                     {/* 1. Live Gate Status (Hero Card) */}
           {pending.length > 0 && (
@@ -844,7 +798,7 @@ export function ResidentDashboard({ route }: any) {
               </View>
 
               {logs.slice(0, 1).map((log: any) => {
-                const derivedState = log.status === 'expected' && log.approval_status ? log.approval_status : log.status;
+                const derivedState = (log.approval_status === 'not_answered' || (log.status === 'denied' && log.approval_status === 'pending')) ? 'not_answered' : ((log.status === 'expected' || log.status === 'denied') && log.approval_status ? log.approval_status : log.status);
                 let cardBg = Warm.cardBg;
                 let cardBorder = Warm.cardBorder;
                 let tagBg = Warm.cardSubtle;
@@ -854,6 +808,7 @@ export function ResidentDashboard({ route }: any) {
                   case 'pending': cardBg = '#FEF3C7'; cardBorder = '#FDE68A'; tagBg = '#FDE68A'; tagFg = '#92400E'; break;
                   case 'approved': cardBg = '#E0F2FE'; cardBorder = '#BAE6FD'; tagBg = '#BAE6FD'; tagFg = '#0369A1'; break;
                   case 'denied': cardBg = '#FFE4E6'; cardBorder = '#FECDD3'; tagBg = '#FECDD3'; tagFg = '#E11D48'; break;
+                  case 'not_answered': cardBg = '#F3F4F6'; cardBorder = '#D1D5DB'; tagBg = '#E5E7EB'; tagFg = '#6B7280'; break;
                   case 'inside': cardBg = '#D1FAE5'; cardBorder = '#A7F3D0'; tagBg = '#A7F3D0'; tagFg = '#059669'; break;
                   case 'overdue': cardBg = '#FEE2E2'; cardBorder = '#FCA5A5'; tagBg = '#FCA5A5'; tagFg = '#DC2626'; break;
                   case 'exited': cardBg = '#F3F4F6'; cardBorder = '#E5E7EB'; tagBg = '#E5E7EB'; tagFg = '#4B5563'; break;
@@ -936,7 +891,7 @@ export function ResidentDashboard({ route }: any) {
             </View>
           )}
           {logs.slice(0, 3).map((log: any) => {
-            const derivedState = log.status === 'expected' && log.approval_status ? log.approval_status : log.status;
+            const derivedState = (log.approval_status === 'not_answered' || (log.status === 'denied' && log.approval_status === 'pending')) ? 'not_answered' : ((log.status === 'expected' || log.status === 'denied') && log.approval_status ? log.approval_status : log.status);
             let cardBg = Warm.cardBg;
             let cardBorder = Warm.cardBorder;
             let tagBg = Warm.cardSubtle;
@@ -946,6 +901,7 @@ export function ResidentDashboard({ route }: any) {
               case 'pending': cardBg = '#FEF3C7'; cardBorder = '#FDE68A'; tagBg = '#FDE68A'; tagFg = '#92400E'; break;
               case 'approved': cardBg = '#E0F2FE'; cardBorder = '#BAE6FD'; tagBg = '#BAE6FD'; tagFg = '#0369A1'; break;
               case 'denied': cardBg = '#FFE4E6'; cardBorder = '#FECDD3'; tagBg = '#FECDD3'; tagFg = '#E11D48'; break;
+              case 'not_answered': cardBg = '#F3F4F6'; cardBorder = '#D1D5DB'; tagBg = '#E5E7EB'; tagFg = '#6B7280'; break;
               case 'inside': cardBg = '#D1FAE5'; cardBorder = '#A7F3D0'; tagBg = '#A7F3D0'; tagFg = '#059669'; break;
               case 'overdue': cardBg = '#FEE2E2'; cardBorder = '#FCA5A5'; tagBg = '#FCA5A5'; tagFg = '#DC2626'; break;
               case 'exited': cardBg = '#F3F4F6'; cardBorder = '#E5E7EB'; tagBg = '#E5E7EB'; tagFg = '#4B5563'; break;
@@ -997,10 +953,10 @@ export function ResidentDashboard({ route }: any) {
                             <Text style={{ fontSize: 10 }}>🚶</Text>
                             <Text style={{ color: Warm.textMuted, fontSize: 11 }}><Text style={{ fontWeight: '700' }}>Entered</Text> at {formatTimestamp(log.entered_at)}</Text>
                           </>
-                        ) : log.approved_at ? (
+                        ) : (log.approval_status !== 'pending' || log.status === 'denied') ? (
                           <>
-                            <Text style={{ fontSize: 10 }}>{log.approval_status === 'approved' ? '✅' : '❌'}</Text>
-                            <Text style={{ color: Warm.textMuted, fontSize: 11 }}><Text style={{ fontWeight: '700' }}>{log.approval_status === 'approved' ? 'Approved' : 'Denied'}</Text> at {formatTimestamp(log.approved_at)}</Text>
+                            <Text style={{ fontSize: 10 }}>{(log.approval_status === 'not_answered' || (log.status === 'denied' && log.approval_status === 'pending')) ? '⏰' : log.approval_status === 'approved' ? '✅' : '❌'}</Text>
+                            <Text style={{ color: Warm.textMuted, fontSize: 11 }}><Text style={{ fontWeight: '700' }}>{(log.approval_status === 'not_answered' || (log.status === 'denied' && log.approval_status === 'pending')) ? 'Not Answered' : log.approval_status === 'approved' ? 'Approved' : 'Denied'}</Text>{(log.approval_status === 'not_answered' || (log.status === 'denied' && log.approval_status === 'pending')) ? ' (Auto Expired)' : ` at ${formatTimestamp(log.approved_at)}`}</Text>
                           </>
                         ) : (
                           <>
@@ -1024,11 +980,12 @@ export function ResidentDashboard({ route }: any) {
                           </Text>
                         </View>
 
-                        {log.approved_at && (
+                        {(log.approval_status !== 'pending' || log.status === 'denied') && (
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={{ fontSize: 10 }}>{log.approval_status === 'approved' ? '✅' : '❌'}</Text>
+                            <Text style={{ fontSize: 10 }}>{(log.approval_status === 'not_answered' || (log.status === 'denied' && log.approval_status === 'pending')) ? '⏰' : log.approval_status === 'approved' ? '✅' : '❌'}</Text>
                             <Text style={{ color: Warm.textMuted, fontSize: 11 }}>
-                              <Text style={{ fontWeight: '700' }}>{log.approval_status === 'approved' ? 'Approved' : 'Denied'}</Text> by {log.approver_name || 'Resident'} at {formatTimestamp(log.approved_at)}
+                              <Text style={{ fontWeight: '700' }}>{(log.approval_status === 'not_answered' || (log.status === 'denied' && log.approval_status === 'pending')) ? 'Not Answered' : log.approval_status === 'approved' ? 'Approved' : 'Denied'}</Text> 
+                              {(log.approval_status === 'not_answered' || (log.status === 'denied' && log.approval_status === 'pending')) ? ' (Exceeded 30 mins wait time)' : ` by ${log.approver_name || 'Resident'} at ${formatTimestamp(log.approved_at)}`}
                             </Text>
                           </View>
                         )}
@@ -1717,6 +1674,29 @@ export function ResidentDashboard({ route }: any) {
 
           {/* Right: Notification Bell & Profile Initials */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {/* Donate Icon */}
+            <TouchableOpacity
+              onPress={() => {
+                setForm({ amount: '500', purpose: 'Society Welfare Fund' });
+                setModal({ type: 'donate' });
+              }}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 19,
+                backgroundColor: '#F0F9FF',
+                borderColor: '#BAE6FD',
+                borderWidth: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#4A3E3D',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.08,
+                shadowRadius: 2,
+              }}
+            >
+              <Text style={{ fontSize: 16 }}>❤️</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setCurrentTab('history')}
               style={{

@@ -99,7 +99,7 @@ async def get_pending(request: Request, db: Session = Depends(get_db), current_u
         
         pending_records = db.query(VisitorLog).filter(
             VisitorLog.society_id == guard.society_id,
-            VisitorLog.status.in_(["pending", "approved", "denied"])
+            VisitorLog.status.in_(["pending", "approved"])
         ).order_by(VisitorLog.created_at.desc()).all()
         
         # Lazy Expiry: Check if any pending request is > 30 mins old
@@ -116,7 +116,7 @@ async def get_pending(request: Request, db: Session = Depends(get_db), current_u
         if updated:
             db.commit()
             
-        return success("Pending approvals", data=[l.to_dict() for l in pending_records])
+        return success("Pending approvals", data=[l.to_dict() for l in pending_records if l.status in ["pending", "approved"]])
     except Exception as e:
         return error("Failed to fetch pending", "SERVER_ERROR", str(e), 500)
 

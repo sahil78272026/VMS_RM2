@@ -186,7 +186,8 @@ export function GuardDashboard({ navigation }: any) {
             setForm((prev: any) => ({ 
               ...prev, 
               visitor_name: visitor.name,
-              vehicle_number: visitor.vehicle_number || prev.vehicle_number
+              vehicle_number: visitor.vehicle_number || prev.vehicle_number,
+              entry_mode: visitor.entry_mode || prev.entry_mode
             }));
             Toast.show({ type: 'success', text1: 'Visitor Found', text2: `Welcome back, ${visitor.name}!` });
           }
@@ -230,6 +231,7 @@ export function GuardDashboard({ navigation }: any) {
     try {
       await GateSessionService.endShift(session?.guard_id);
       setSelectedGuard(null);
+      setCurrentTab('dashboard');
       load();
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to end gate shift' });
@@ -337,59 +339,29 @@ export function GuardDashboard({ navigation }: any) {
                 </Btn>
               </View>
 
-              <TouchableOpacity
-                onPress={logout}
-                style={{
-                  backgroundColor: Warm.redDim,
-                  borderColor: Warm.red + '44',
-                  borderWidth: 1,
-                  padding: 20,
-                  borderRadius: 18,
-                  alignItems: 'center',
-                  flexDirection: 'row',
-                  justifyContent: 'center',
-                  gap: 10
-                }}
-              >
-                <Text style={{ fontSize: 20 }}>🚪</Text>
-                <Text style={{ color: Warm.red, fontWeight: '800', fontSize: 18 }}>LOG OUT</Text>
-              </TouchableOpacity>
+              {!(user?.name?.toLowerCase().includes('terminal')) && (
+                <TouchableOpacity
+                  onPress={logout}
+                  style={{
+                    backgroundColor: Warm.redDim,
+                    borderColor: Warm.red + '44',
+                    borderWidth: 1,
+                    padding: 20,
+                    borderRadius: 18,
+                    alignItems: 'center',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 10
+                  }}
+                >
+                  <Text style={{ fontSize: 20 }}>🚪</Text>
+                  <Text style={{ color: Warm.red, fontWeight: '800', fontSize: 18 }}>LOG OUT</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             <>
-              <View style={{
-              backgroundColor: Warm.greenDim,
-              borderColor: Warm.green + '44',
-              borderWidth: 1,
-              borderRadius: 18,
-              padding: 14,
-              marginBottom: 16,
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}>
-              <View>
-                <Text style={{ color: Warm.green, fontWeight: '800', fontSize: 14 }}>
-                  🟢 ON DUTY · {session.guard_name || 'Guard'} ({session.gate?.name || 'Gate'})
-                </Text>
-                <Text style={{ color: Warm.textMuted, fontSize: 11, marginTop: 2 }}>
-                  Shift started at {formatTimestamp(session.shift_start)}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={endShift}
-                style={{
-                  backgroundColor: Warm.redDim,
-                  borderColor: Warm.red + '44',
-                  borderWidth: 1,
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                  borderRadius: 10,
-                }}
-              >
-                <Text style={{ color: Warm.red, fontWeight: '800', fontSize: 12 }}>End Shift</Text>
-              </TouchableOpacity>
-            </View>
+
 
           {/* Quick Metrics */}
           <View style={{ flexDirection: 'row', gap: 10, marginBottom: 18 }}>
@@ -428,25 +400,6 @@ export function GuardDashboard({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
-          {/* Primary Action Button */}
-          <TouchableOpacity
-            onPress={() => setCurrentTab('register')}
-            style={{
-              backgroundColor: Warm.accent,
-              borderRadius: 16,
-              paddingVertical: 14,
-              alignItems: 'center',
-              marginBottom: 20,
-              shadowColor: Warm.accent,
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.2,
-              shadowRadius: 4,
-            }}
-          >
-            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16 }}>
-              + Log Walk-in Visitor
-            </Text>
-          </TouchableOpacity>
 
           {/* Pending Approvals */}
           {pending.length > 0 && (
@@ -544,7 +497,7 @@ export function GuardDashboard({ navigation }: any) {
               <Text style={{ color: Warm.textMuted, fontSize: 14, fontWeight: '600' }}>No visitors logged yet.</Text>
             </View>
           ) : logs.slice(0, 3).map((log: any) => {
-            const derivedState = log.status === 'expected' && log.approval_status ? log.approval_status : log.status;
+            const derivedState = (log.approval_status === 'not_answered' || (log.status === 'denied' && log.approval_status === 'pending')) ? 'not_answered' : ((log.status === 'expected' || log.status === 'denied') && log.approval_status ? log.approval_status : log.status);
             const isInside = log.status === 'inside' || log.status === 'overdue';
             const isApproved = derivedState === 'approved' && !isInside && log.status !== 'exited' && log.status !== 'cancelled';
             
@@ -557,6 +510,7 @@ export function GuardDashboard({ navigation }: any) {
               case 'pending': cardBg = '#FEF3C7'; cardBorder = '#FDE68A'; tagBg = '#FDE68A'; tagFg = '#92400E'; break;
               case 'approved': cardBg = '#E0F2FE'; cardBorder = '#BAE6FD'; tagBg = '#BAE6FD'; tagFg = '#0369A1'; break;
               case 'denied': cardBg = '#FFE4E6'; cardBorder = '#FECDD3'; tagBg = '#FECDD3'; tagFg = '#E11D48'; break;
+              case 'not_answered': cardBg = '#F3F4F6'; cardBorder = '#D1D5DB'; tagBg = '#E5E7EB'; tagFg = '#6B7280'; break;
               case 'inside': cardBg = '#D1FAE5'; cardBorder = '#A7F3D0'; tagBg = '#A7F3D0'; tagFg = '#059669'; break;
               case 'overdue': cardBg = '#FEE2E2'; cardBorder = '#FCA5A5'; tagBg = '#FCA5A5'; tagFg = '#DC2626'; break;
               case 'exited': cardBg = '#F3F4F6'; cardBorder = '#E5E7EB'; tagBg = '#E5E7EB'; tagFg = '#4B5563'; break;
@@ -643,9 +597,13 @@ export function GuardDashboard({ navigation }: any) {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={{ fontSize: 12, color: '#4B5563' }}>• 📝 <Text style={{ fontWeight: '700', color: '#1F2937' }}>Created</Text> by {log.approval_source === 'self_checkin' ? 'Visitor (Self)' : (log.guard_name || 'Guard')} at {formatTimestamp(log.created_at)}</Text>
                     </View>
-                    {log.approved_at && (
+                    {(log.approval_status !== 'pending' || log.status === 'denied') && (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={{ fontSize: 12, color: '#4B5563' }}>• {log.approval_status === 'approved' ? '✅' : '❌'} <Text style={{ fontWeight: '700', color: '#1F2937' }}>{log.approval_status === 'approved' ? 'Approved' : 'Denied'}</Text> by {log.approver_name || 'Resident'} at {formatTimestamp(log.approved_at)}</Text>
+                        {(log.approval_status === 'not_answered' || (log.status === 'denied' && log.approval_status === 'pending')) ? (
+                          <Text style={{ fontSize: 12, color: '#4B5563' }}>• ⏰ <Text style={{ fontWeight: '700', color: '#1F2937' }}>Not Answered</Text> (Auto Expired)</Text>
+                        ) : (
+                          <Text style={{ fontSize: 12, color: '#4B5563' }}>• {log.approval_status === 'approved' ? '✅' : '❌'} <Text style={{ fontWeight: '700', color: '#1F2937' }}>{log.approval_status === 'approved' ? 'Approved' : 'Denied'}</Text> by {log.approver_name || 'Resident'} {log.approved_at && `at ${formatTimestamp(log.approved_at)}`}</Text>
+                        )}
                       </View>
                     )}
                     {log.entered_at && (
@@ -831,7 +789,7 @@ export function GuardDashboard({ navigation }: any) {
           )}
 
           {displayLogs.map((log: any) => {
-            const derivedState = log.status === 'expected' && log.approval_status ? log.approval_status : log.status;
+            const derivedState = (log.approval_status === 'not_answered' || (log.status === 'denied' && log.approval_status === 'pending')) ? 'not_answered' : ((log.status === 'expected' || log.status === 'denied') && log.approval_status ? log.approval_status : log.status);
             const isInside = log.status === 'inside' || log.status === 'overdue';
             const isApproved = derivedState === 'approved' && !isInside && log.status !== 'exited' && log.status !== 'cancelled';
             
@@ -844,6 +802,7 @@ export function GuardDashboard({ navigation }: any) {
               case 'pending': cardBg = '#FEF3C7'; cardBorder = '#FDE68A'; tagBg = '#FDE68A'; tagFg = '#92400E'; break;
               case 'approved': cardBg = '#E0F2FE'; cardBorder = '#BAE6FD'; tagBg = '#BAE6FD'; tagFg = '#0369A1'; break;
               case 'denied': cardBg = '#FFE4E6'; cardBorder = '#FECDD3'; tagBg = '#FECDD3'; tagFg = '#E11D48'; break;
+              case 'not_answered': cardBg = '#F3F4F6'; cardBorder = '#D1D5DB'; tagBg = '#E5E7EB'; tagFg = '#6B7280'; break;
               case 'inside': cardBg = '#D1FAE5'; cardBorder = '#A7F3D0'; tagBg = '#A7F3D0'; tagFg = '#059669'; break;
               case 'overdue': cardBg = '#FEE2E2'; cardBorder = '#FCA5A5'; tagBg = '#FCA5A5'; tagFg = '#DC2626'; break;
               case 'exited': cardBg = '#F3F4F6'; cardBorder = '#E5E7EB'; tagBg = '#E5E7EB'; tagFg = '#4B5563'; break;
@@ -930,9 +889,13 @@ export function GuardDashboard({ navigation }: any) {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={{ fontSize: 12, color: '#4B5563' }}>• 📝 <Text style={{ fontWeight: '700', color: '#1F2937' }}>Created</Text> by {log.approval_source === 'self_checkin' ? 'Visitor (Self)' : (log.guard_name || 'Guard')} at {formatTimestamp(log.created_at)}</Text>
                     </View>
-                    {log.approved_at && (
+                    {(log.approval_status !== 'pending' || log.status === 'denied') && (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={{ fontSize: 12, color: '#4B5563' }}>• {log.approval_status === 'approved' ? '✅' : '❌'} <Text style={{ fontWeight: '700', color: '#1F2937' }}>{log.approval_status === 'approved' ? 'Approved' : 'Denied'}</Text> by {log.approver_name || 'Resident'} at {formatTimestamp(log.approved_at)}</Text>
+                        {(log.approval_status === 'not_answered' || (log.status === 'denied' && log.approval_status === 'pending')) ? (
+                          <Text style={{ fontSize: 12, color: '#4B5563' }}>• ⏰ <Text style={{ fontWeight: '700', color: '#1F2937' }}>Not Answered</Text> (Auto Expired)</Text>
+                        ) : (
+                          <Text style={{ fontSize: 12, color: '#4B5563' }}>• {log.approval_status === 'approved' ? '✅' : '❌'} <Text style={{ fontWeight: '700', color: '#1F2937' }}>{log.approval_status === 'approved' ? 'Approved' : 'Denied'}</Text> by {log.approver_name || 'Resident'} {log.approved_at && `at ${formatTimestamp(log.approved_at)}`}</Text>
+                        )}
                       </View>
                     )}
                     {log.entered_at && (
@@ -1044,6 +1007,27 @@ export function GuardDashboard({ navigation }: any) {
             <Text style={{ color: Warm.textDim, marginTop: 16, fontSize: 11 }}>
               Points to: {qrUrl}
             </Text>
+
+            {/* Primary Action Button moved to QR tab */}
+            <TouchableOpacity
+              onPress={() => setCurrentTab('register')}
+              style={{
+                backgroundColor: Warm.accent,
+                borderRadius: 16,
+                paddingVertical: 14,
+                alignItems: 'center',
+                marginTop: 30,
+                width: '100%',
+                shadowColor: Warm.accent,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.2,
+                shadowRadius: 4,
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16 }}>
+                + Log Walk-in Visitor
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       );
@@ -1068,20 +1052,56 @@ export function GuardDashboard({ navigation }: any) {
               <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 11 }}>SECURITY GUARD</Text>
             </View>
           </View>
-          <TouchableOpacity
-            onPress={logout}
-            style={{
-              backgroundColor: Warm.redDim,
-              borderColor: Warm.red + '44',
-              borderWidth: 1,
-              borderRadius: 16,
-              paddingVertical: 14,
-              alignItems: 'center',
-              marginTop: 20,
-            }}
-          >
-            <Text style={{ color: Warm.red, fontWeight: '800', fontSize: 15 }}>Log Out of Guard Terminal</Text>
-          </TouchableOpacity>
+            {session && (
+              <View style={{
+                backgroundColor: Warm.greenDim,
+                borderColor: Warm.green + '44',
+                borderWidth: 1,
+                borderRadius: 16,
+                padding: 16,
+                marginTop: 24,
+                width: '100%',
+              }}>
+                <View style={{ marginBottom: 16, alignItems: 'center' }}>
+                  <Text style={{ color: Warm.green, fontWeight: '800', fontSize: 16 }}>
+                    🟢 ON DUTY · {session.guard_name || 'Guard'} ({session.gate?.name || 'Gate'})
+                  </Text>
+                  <Text style={{ color: Warm.textMuted, fontSize: 13, marginTop: 4 }}>
+                    Shift started at {formatTimestamp(session.shift_start)}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={endShift}
+                  style={{
+                    backgroundColor: Warm.red,
+                    paddingHorizontal: 14,
+                    paddingVertical: 16,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 16 }}>END SHIFT</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {!session && (
+              <TouchableOpacity
+                onPress={logout}
+                style={{
+                  backgroundColor: Warm.redDim,
+                  borderColor: Warm.red + '44',
+                  borderWidth: 1,
+                  borderRadius: 16,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  marginTop: 20,
+                  width: '100%'
+                }}
+              >
+                <Text style={{ color: Warm.red, fontWeight: '800', fontSize: 15 }}>Log Out of Guard Profile</Text>
+              </TouchableOpacity>
+            )}
         </View>
       );
     }

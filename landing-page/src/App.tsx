@@ -4,6 +4,99 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
 import ProductLandingPage from './ProductLandingPage';
 
+const MultiSearchableSelect = ({ options, value = [], onChange, placeholder }: any) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const normalizedSearch = search.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const filtered = options.filter((o: any) => o.label.toLowerCase().replace(/[^a-z0-9]/g, '').includes(normalizedSearch));
+  const selectedLabels = value.map((v: string) => options.find((o: any) => o.value === v)?.label).filter(Boolean);
+
+  const toggleOption = (val: string) => {
+    if (value.includes(val)) {
+      onChange(value.filter((v: string) => v !== val));
+    } else {
+      onChange([...value, val]);
+    }
+  };
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative' }}>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        style={{ 
+          backgroundColor: 'var(--input-bg)', border: '1px solid var(--border)', borderRadius: '12px', 
+          padding: '12px 16px', fontSize: '15px', color: value.length > 0 ? 'var(--text-primary)' : 'var(--text-secondary)',
+          cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+        }}
+      >
+        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 8 }}>
+          {value.length > 0 ? selectedLabels.join(', ') : placeholder}
+        </div>
+        <span>▼</span>
+      </div>
+      
+      {isOpen && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '8px',
+          backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '12px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 1000, overflow: 'hidden', display: 'flex', flexDirection: 'column'
+        }}>
+          <div style={{ padding: '12px', borderBottom: '1px solid var(--border)' }}>
+            <input 
+              autoFocus
+              placeholder="Search flats..." 
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '14px', backgroundColor: 'var(--input-bg)' }}
+            />
+          </div>
+          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            {filtered.map((o: any) => {
+              const isSelected = value.includes(o.value);
+              return (
+                <div 
+                  key={o.value}
+                  onClick={() => toggleOption(o.value)}
+                  style={{ 
+                    padding: '12px 16px', cursor: 'pointer', fontSize: '15px',
+                    borderBottom: '1px solid rgba(0,0,0,0.05)', backgroundColor: isSelected ? 'var(--bg-secondary)' : 'transparent',
+                    display: 'flex', alignItems: 'center', gap: '12px',
+                    ...o.style
+                  }}
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={isSelected} 
+                    readOnly
+                    style={{ width: 18, height: 18, accentColor: 'var(--accent)', cursor: 'pointer', pointerEvents: 'none' }}
+                  />
+                  <span>{o.label}</span>
+                </div>
+              );
+            })}
+            {filtered.length === 0 && <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)' }}>No results found</div>}
+          </div>
+          <div style={{ padding: '12px', borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+            <button type="button" onClick={() => setIsOpen(false)} className="btn btn-primary w-full" style={{ padding: '8px' }}>Done</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function App() {
   const params = new URLSearchParams(window.location.search);
   const initialSocietyId = params.get('society_id');
@@ -57,7 +150,8 @@ export default function App() {
             setForm(p => ({ 
               ...p, 
               visitor_name: visitor.name,
-              vehicle_number: visitor.vehicle_number || p.vehicle_number 
+              vehicle_number: visitor.vehicle_number || p.vehicle_number,
+              entry_mode: visitor.entry_mode || p.entry_mode
             }));
           }
         })
@@ -163,93 +257,7 @@ export default function App() {
     );
   }
 
-  const MultiSearchableSelect = ({ options, value = [], onChange, placeholder }: any) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [search, setSearch] = useState('');
-    const wrapperRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-      const handleClickOutside = (e: MouseEvent) => {
-        if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-          setIsOpen(false);
-        }
-      };
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const normalizedSearch = search.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const filtered = options.filter((o: any) => o.label.toLowerCase().replace(/[^a-z0-9]/g, '').includes(normalizedSearch));
-    const selectedLabels = value.map((v: string) => options.find((o: any) => o.value === v)?.label).filter(Boolean);
-
-    const toggleOption = (val: string) => {
-      if (value.includes(val)) {
-        onChange(value.filter((v: string) => v !== val));
-      } else {
-        onChange([...value, val]);
-      }
-    };
-
-    return (
-      <div ref={wrapperRef} style={{ position: 'relative' }}>
-        <div 
-          onClick={() => setIsOpen(!isOpen)}
-          style={{ 
-            backgroundColor: 'var(--input-bg)', border: '1px solid var(--border)', borderRadius: '12px', 
-            padding: '12px 16px', fontSize: '15px', color: value.length > 0 ? 'var(--text-primary)' : 'var(--text-secondary)',
-            cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-          }}
-        >
-          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: 8 }}>
-            {value.length > 0 ? selectedLabels.join(', ') : placeholder}
-          </div>
-          <span>▼</span>
-        </div>
-        
-        {isOpen && (
-          <div style={{
-            position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '8px',
-            backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '12px',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.1)', zIndex: 1000, overflow: 'hidden', display: 'flex', flexDirection: 'column'
-          }}>
-            <div style={{ padding: '12px', borderBottom: '1px solid var(--border)' }}>
-              <input 
-                autoFocus
-                placeholder="Search flats..." 
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '14px', backgroundColor: 'var(--input-bg)' }}
-              />
-            </div>
-            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-              {filtered.map((o: any) => {
-                const isSelected = value.includes(o.value);
-                return (
-                  <div 
-                    key={o.value}
-                    onClick={() => toggleOption(o.value)}
-                    style={{ 
-                      padding: '12px 16px', cursor: 'pointer', fontSize: '15px',
-                      borderBottom: '1px solid rgba(0,0,0,0.05)', backgroundColor: isSelected ? 'var(--bg-secondary)' : 'transparent',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      ...o.style
-                    }}
-                  >
-                    <span>{o.label}</span>
-                    {isSelected && <span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>✓</span>}
-                  </div>
-                );
-              })}
-              {filtered.length === 0 && <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)' }}>No results found</div>}
-            </div>
-            <div style={{ padding: '12px', borderTop: '1px solid var(--border)', textAlign: 'center' }}>
-              <button type="button" onClick={() => setIsOpen(false)} className="btn btn-primary w-full" style={{ padding: '8px' }}>Done</button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
 
   return (
     <>
@@ -290,11 +298,6 @@ export default function App() {
           {societyDetails?.city && <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{societyDetails.city}</p>}
           <p style={{ color: 'var(--text-secondary)', marginTop: 8, fontWeight: 600 }}>Visitor Self Check-In</p>
         </div>
-        
-        {error && error !== 'Please enter a valid 10-digit mobile number' && error !== 'Please provide a photo' && (
-          <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: 14 }}>{error}</div>
-        )}
-
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           
           <div className="form-group">
@@ -332,11 +335,6 @@ export default function App() {
               {form.photo_base64 && (
                 <>
                   <div className="form-group">
-                    <label>Your Name *</label>
-                    <input required placeholder="Full Name" value={form.visitor_name} onChange={e => set('visitor_name')(e.target.value)} />
-                  </div>
-
-                  <div className="form-group">
                     <label>Flats to Visit *</label>
                     <MultiSearchableSelect 
                       value={form.flat_ids} 
@@ -344,6 +342,11 @@ export default function App() {
                       options={flats.map(f => ({ value: f.id.toString(), label: `Flat ${f.flat_number}`, style: getFlatStyle(f.flat_number) }))}
                       placeholder="Select Flats..."
                     />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Your Name *</label>
+                    <input required placeholder="Full Name" value={form.visitor_name} onChange={e => set('visitor_name')(e.target.value)} />
                   </div>
 
                   <div className="form-group">
@@ -397,6 +400,10 @@ export default function App() {
                 </>
               )}
             </>
+          )}
+
+          {error && error !== 'Please enter a valid 10-digit mobile number' && error !== 'Please provide a photo' && (
+            <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '12px', borderRadius: '8px', marginTop: '16px', fontSize: 14, textAlign: 'center', fontWeight: '500' }}>{error}</div>
           )}
 
           {form.visitor_phone && form.visitor_phone.length === 10 && form.photo_base64 && (

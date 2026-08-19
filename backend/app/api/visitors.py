@@ -53,12 +53,14 @@ async def lookup_visitor(phone_number: str, db: Session = Depends(get_db)):
         
         latest_log = db.query(VisitorLog).filter(VisitorLog.visitor_id == visitor.id).order_by(VisitorLog.created_at.desc()).first()
         vehicle_num = latest_log.vehicle_number if latest_log else ""
+        entry_mode = latest_log.entry_mode if latest_log else "foot"
         
         return success(
             "Visitor found", 
             data={
                 "name": visitor.name,
                 "vehicle_number": vehicle_num,
+                "entry_mode": entry_mode,
                 "id": visitor.id
             }
         )
