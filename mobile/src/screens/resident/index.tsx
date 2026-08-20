@@ -247,14 +247,14 @@ export function ResidentDashboard({ route }: any) {
   };
 
   const submitRenewal = async () => {
-    if (!form.utr_number || form.utr_number.length < 5) {
-      return Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter a valid UTR number' });
+    if (!form.receipt_url) {
+      return Toast.show({ type: 'error', text1: 'Error', text2: 'Please upload a payment screenshot/receipt.' });
     }
     try {
       await MaintenanceService.submitPayment({
         amount: modal.amount,
         months_added: modal.months_added,
-        utr_number: form.utr_number,
+        utr_number: 'See Receipt',
         proof_url: form.receipt_url || null,
       });
       setModal(null);
@@ -476,15 +476,12 @@ export function ResidentDashboard({ route }: any) {
           } as any);
         }
 
-        const res = await OCRService.scanUtr(formData);
+        // 1. Upload the receipt to the backend
+        const res = await OCRService.uploadReceipt(formData);
+        const receiptUrl = res.data?.data?.receipt_url;
         
-        if (res.data?.data?.utr_code) {
-          setForm((prev: any) => ({ ...(prev || {}), utr_number: res.data.data.utr_code, proof_url: uri, proof_filename: filename, receipt_url: res.data.data.receipt_url }));
-          Toast.show({ type: 'success', text1: 'Success', text2: `UTR ${res.data.data.utr_code} extracted automatically!` });
-        } else {
-          setForm((prev: any) => ({ ...(prev || {}), proof_url: uri, proof_filename: filename, receipt_url: res.data?.data?.receipt_url }));
-          Toast.show({ type: 'error', text1: 'Not Found', text2: 'Could not detect UTR code in the screenshot. Please enter it manually.' });
-        }
+        setForm((prev: any) => ({ ...(prev || {}), proof_url: uri, proof_filename: filename, receipt_url: receiptUrl }));
+        Toast.show({ type: 'success', text1: 'Uploaded', text2: 'Receipt uploaded successfully.' });
       }
     } catch (err: any) {
       Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to scan image for UTR code.' });
@@ -494,13 +491,16 @@ export function ResidentDashboard({ route }: any) {
   };
 
   const submitDonation = async () => {
-    if (!form?.utr_number || !form?.amount) {
-      return Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter amount and UTR number' });
+    if (!form?.amount) {
+      return Toast.show({ type: 'error', text1: 'Error', text2: 'Please enter donation amount' });
+    }
+    if (!form?.receipt_url) {
+      return Toast.show({ type: 'error', text1: 'Error', text2: 'Please upload a payment screenshot/receipt.' });
     }
     try {
       await api.post('/societies/donate', {
         amount: parseFloat(form.amount),
-        utr_number: form.utr_number,
+        utr_number: 'See Receipt',
         purpose: form.purpose || 'Society Welfare Fund',
         receipt_url: form.receipt_url || null
       });
@@ -516,6 +516,8 @@ export function ResidentDashboard({ route }: any) {
   const isMaintenanceExpired = validUntil ? validUntil < new Date() : true;
   const daysRemaining = validUntil ? Math.ceil((validUntil.getTime() - new Date().getTime()) / (1000 * 3600 * 24)) : 0;
   const shouldShowRenew = isMaintenanceExpired || (daysRemaining <= 15);
+
+  const hasPendingPayment = payments.some((p: any) => p.status === 'pending');
 
   // Active Flat String (e.g. "23B" or "101")
   const activeFlatNumber = flatStatus?.flat_number || user?.flat_number || '23B';
@@ -542,7 +544,30 @@ export function ResidentDashboard({ route }: any) {
           </View>
 
           {/* 3. Society Maintenance & Status Card (Only shown if payment is due) */}
-          {isMaintenanceExpired && (
+          {hasPendingPayment ? (
+            <View style={{
+              marginBottom: 20,
+              backgroundColor: '#FEF9C3',
+              borderColor: '#FDE047',
+              borderWidth: 1.5,
+              borderRadius: 20,
+              padding: 18,
+              ...Warm.shadow,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 15 }}>⏳</Text>
+                <Text style={{ fontSize: 11, color: '#A16207', textTransform: 'uppercase', fontWeight: '800', letterSpacing: 0.5 }}>
+                  Payment Pending Approval
+                </Text>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginTop: 3 }}>
+                Admin review in progress
+              </Text>
+              <Text style={{ color: Warm.textDim, fontSize: 12, marginTop: 2 }}>
+                Your payment receipt has been submitted and is currently awaiting verification from the society admin.
+              </Text>
+            </View>
+          ) : isMaintenanceExpired ? (
             <View style={{
               marginBottom: 20,
               backgroundColor: '#FEF2F2',
@@ -589,7 +614,7 @@ export function ResidentDashboard({ route }: any) {
                 </TouchableOpacity>
               </View>
             </View>
-          )}
+          ) : null}
 
           {/* Donation Quick Action */}
 
@@ -1275,7 +1300,12 @@ export function ResidentDashboard({ route }: any) {
               </View>
             </View>
 
-            {shouldShowRenew && (
+            {hasPendingPayment ? (
+              <View style={{ marginTop: 20, backgroundColor: '#FEF9C3', padding: 16, borderRadius: 14, alignItems: 'center', borderColor: '#FDE047', borderWidth: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#A16207' }}>⏳ Pending Admin Approval</Text>
+                <Text style={{ fontSize: 12, color: '#A16207', marginTop: 4, textAlign: 'center' }}>Your renewal payment receipt is currently being verified.</Text>
+              </View>
+            ) : shouldShowRenew && (
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
                 <TouchableOpacity
                   onPress={() => { setForm({}); setModal({ type: 'renew', amount: 1200, months_added: 6 }); }}
@@ -1346,94 +1376,7 @@ export function ResidentDashboard({ route }: any) {
             </View>
           )}
 
-          {pendingFamily.length > 0 && (
-            <View style={{ marginTop: 20 }}>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginBottom: 12 }}>
-                Pending Family Approvals
-              </Text>
-              {pendingFamily.map((pf: any) => (
-                <View key={pf.id} style={{
-                  backgroundColor: '#FFFFFF',
-                  padding: 16,
-                  borderRadius: 16,
-                  borderColor: '#E5DFD7',
-                  borderWidth: 1,
-                  marginBottom: 10,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.05,
-                  shadowRadius: 4,
-                  elevation: 2,
-                }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Avatar name={pf.name} size={44} color={Warm.accent} />
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text }}>{pf.name}</Text>
-                      <Text style={{ fontSize: 13, color: Warm.textMuted }}>{pf.phone}</Text>
-                    </View>
-                    {approvingMemberId !== pf.id ? (
-                      <TouchableOpacity
-                        onPress={() => setApprovingMemberId(pf.id)}
-                        style={{
-                          backgroundColor: Warm.green,
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 12,
-                        }}
-                      >
-                        <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 13 }}>Review</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <TouchableOpacity
-                        onPress={() => setApprovingMemberId(null)}
-                        style={{
-                          backgroundColor: Warm.cardBorder,
-                          paddingHorizontal: 16,
-                          paddingVertical: 8,
-                          borderRadius: 12,
-                        }}
-                      >
-                        <Text style={{ color: Warm.text, fontWeight: '800', fontSize: 13 }}>Cancel</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                  
-                  {approvingMemberId === pf.id && (
-                    <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: Warm.cardBorder }}>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: Warm.text, marginBottom: 8 }}>Select Relationship:</Text>
-                      <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-                        {['spouse', 'parent', 'child', 'sibling'].map(rel => (
-                          <TouchableOpacity 
-                            key={rel} 
-                            onPress={() => setApprovingRelation(rel)}
-                            style={{
-                              backgroundColor: approvingRelation === rel ? Warm.accent : '#FFF',
-                              borderColor: Warm.cardBorder, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8
-                            }}
-                          >
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: approvingRelation === rel ? '#FFF' : Warm.text, textTransform: 'capitalize' }}>
-                              {rel}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => approveFamilyMember(pf)}
-                        style={{
-                          backgroundColor: Warm.green,
-                          paddingVertical: 12,
-                          borderRadius: 10,
-                          alignItems: 'center'
-                        }}
-                      >
-                        <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Confirm & Approve</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
+
 
           {/* Settings Toggle for Ringtone */}
           <View style={{ marginTop: 24, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 20, borderColor: Warm.cardBorder, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', ...Warm.shadow }}>
@@ -1545,16 +1488,16 @@ export function ResidentDashboard({ route }: any) {
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={{ fontSize: 15, fontWeight: '700', color: Warm.text }}>{fm.user?.name || 'Unknown'}</Text>
-                      <View style={{ backgroundColor: fm.role === 'primary' ? Warm.greenDim : Warm.cardSubtle, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                         <Text style={{ fontSize: 9, fontWeight: '800', color: fm.role === 'primary' ? Warm.green : Warm.textMuted, textTransform: 'uppercase' }}>
-                           {fm.role}
+                      <View style={{ backgroundColor: fm.status === 'pending' ? Warm.amberDim : fm.role === 'primary' ? Warm.greenDim : Warm.cardSubtle, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                         <Text style={{ fontSize: 9, fontWeight: '800', color: fm.status === 'pending' ? Warm.amber : fm.role === 'primary' ? Warm.green : Warm.textMuted, textTransform: 'uppercase' }}>
+                           {fm.status === 'pending' ? 'APPROVAL PENDING' : fm.role}
                          </Text>
                       </View>
                     </View>
                     <Text style={{ fontSize: 12, color: Warm.textMuted, marginTop: 2 }}>{fm.user?.phone || 'No phone'}</Text>
                   </View>
 
-                  {myFlatUser?.role === 'primary' && fm.user_id !== user?.id && (
+                  {myFlatUser?.role === 'primary' && fm.user_id !== user?.id && fm.status !== 'pending' && (
                      <View style={{ flexDirection: 'row', gap: 8 }}>
                        <TouchableOpacity
                          onPress={() => fm.role === 'primary' ? handleDemote(fm.id) : handlePromote(fm.id)}
@@ -1819,7 +1762,27 @@ export function ResidentDashboard({ route }: any) {
 
       {/* ── Renewal Modal ── */}
       {modal?.type === 'renew' && (
-        <Modal title="Maintenance Payment" subtitle={`Amount: ₹${modal?.amount} for ${modal?.months_added} Months`} onClose={() => setModal(null)}>
+        <Modal title="Maintenance Payment" subtitle={`Complete your dues payment`} onClose={() => setModal(null)}>
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: Warm.text, marginBottom: 8 }}>Select Renewal Plan:</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity 
+                onPress={() => setModal({ ...modal, amount: 1200, months_added: 6 })}
+                style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 2, borderColor: modal?.months_added === 6 ? '#0284C7' : Warm.cardBorder, backgroundColor: modal?.months_added === 6 ? '#F0F9FF' : '#FFF', alignItems: 'center' }}
+              >
+                <Text style={{ fontWeight: '800', color: modal?.months_added === 6 ? '#0284C7' : Warm.textMuted }}>6 Months</Text>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: modal?.months_added === 6 ? '#0284C7' : Warm.textDim, marginTop: 2 }}>₹1,200</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => setModal({ ...modal, amount: 2400, months_added: 12 })}
+                style={{ flex: 1, padding: 12, borderRadius: 12, borderWidth: 2, borderColor: modal?.months_added === 12 ? '#10B981' : Warm.cardBorder, backgroundColor: modal?.months_added === 12 ? '#ECFDF5' : '#FFF', alignItems: 'center' }}
+              >
+                <Text style={{ fontWeight: '800', color: modal?.months_added === 12 ? '#10B981' : Warm.textMuted }}>1 Year</Text>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: modal?.months_added === 12 ? '#10B981' : Warm.textDim, marginTop: 2 }}>₹2,400</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           <Text style={{ color: Warm.textMuted, marginBottom: 14 }}>
             1. Tap below to launch your UPI application and complete payment.
           </Text>
@@ -1843,34 +1806,14 @@ export function ResidentDashboard({ route }: any) {
             <TouchableOpacity onPress={handleUploadScreenshot} disabled={ocrLoading} style={{ backgroundColor: Warm.cardSubtle, borderColor: Warm.cardBorder, borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, padding: 20, alignItems: 'center', marginBottom: 16 }}>
               {ocrLoading ? <ActivityIndicator size="large" color={Warm.accent} style={{ marginBottom: 10 }} /> : <Text style={{ fontSize: 24 }}>📸</Text>}
               <Text style={{ color: Warm.textMuted, marginTop: 8, fontWeight: '600' }}>
-                {ocrLoading ? 'Scanning image for UTR Code...' : 'Upload Payment Screenshot'}
-              </Text>
-              <Text style={{ color: Warm.textDim, fontSize: 11, marginTop: 4, textAlign: 'center' }}>
-                We will automatically extract the UTR code
+                {ocrLoading ? 'Uploading Receipt...' : 'Upload Payment Screenshot'}
               </Text>
             </TouchableOpacity>
           )}
 
-          {!form?.utr_number ? (
-            <View>
-              <Text style={{ color: Warm.textMuted, marginBottom: 8 }}>
-                Or manually enter the 12-digit UPI Reference / UTR Number:
-              </Text>
-              <Input
-                label="UTR / Reference Number *"
-                placeholder="e.g. 329182371928"
-                value={form?.utr_number || ''}
-                onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), utr_number: v }))}
-              />
-              <Btn full variant="green" onClick={submitRenewal} style={{ marginTop: 8 }} disabled={!form?.utr_number}>
-                Submit Proof for Approval →
-              </Btn>
-            </View>
-          ) : (
-            <Btn full variant="green" onClick={submitRenewal} style={{ marginTop: 8 }}>
-              ✓ Confirm UTR {form.utr_number} & Submit
-            </Btn>
-          )}
+          <Btn full variant="green" onClick={submitRenewal} style={{ marginTop: 8 }} disabled={!form?.receipt_url}>
+            {form?.receipt_url ? 'Submit Proof for Approval →' : 'Please upload receipt first'}
+          </Btn>
         </Modal>
       )}
 
@@ -1904,31 +1847,14 @@ export function ResidentDashboard({ route }: any) {
             <TouchableOpacity onPress={handleUploadScreenshot} disabled={ocrLoading} style={{ backgroundColor: Warm.cardSubtle, borderColor: Warm.cardBorder, borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, padding: 20, alignItems: 'center', marginBottom: 16 }}>
               {ocrLoading ? <ActivityIndicator size="large" color={Warm.accent} style={{ marginBottom: 10 }} /> : <Text style={{ fontSize: 24 }}>📸</Text>}
               <Text style={{ color: Warm.textMuted, marginTop: 8, fontWeight: '600' }}>
-                {ocrLoading ? 'Scanning image for UTR Code...' : 'Upload Payment Screenshot'}
-              </Text>
-              <Text style={{ color: Warm.textDim, fontSize: 11, marginTop: 4, textAlign: 'center' }}>
-                We will automatically extract the UTR code
+                {ocrLoading ? 'Uploading Receipt...' : 'Upload Payment Screenshot'}
               </Text>
             </TouchableOpacity>
           )}
 
-          {!form?.utr_number ? (
-            <View>
-              <Input
-                label="UTR / Reference Number *"
-                placeholder="e.g. 329182371928"
-                value={form?.utr_number || ''}
-                onChange={(v: string) => setForm((prev: any) => ({ ...(prev || {}), utr_number: v }))}
-              />
-              <Btn full variant="green" onClick={submitDonation} style={{ marginTop: 8 }} disabled={!form?.utr_number}>
-                Submit Donation →
-              </Btn>
-            </View>
-          ) : (
-            <Btn full variant="green" onClick={submitDonation} style={{ marginTop: 8 }}>
-              ✓ Confirm UTR {form.utr_number} & Submit
-            </Btn>
-          )}
+          <Btn full variant="green" onClick={submitDonation} style={{ marginTop: 8 }} disabled={!form?.receipt_url}>
+            {form?.receipt_url ? 'Submit Donation →' : 'Please upload receipt first'}
+          </Btn>
         </Modal>
       )}
 

@@ -33,10 +33,31 @@ async def get_all_flat_users(request: Request, db: Session = Depends(get_db), cu
 async def get_my_flat(request: Request, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """Resident: get all members of their own flat."""
     try:
+        from app.models import User, FlatUser
         flat_user_service = FlatUserService(db)
         user_id = current_user.id
         members = flat_user_service.get_flat_members(user_id)
-        return success("Flat members fetched", data=[m.to_dict() for m in members])
+        
+        # Add pending family members requested for this flat
+        requester = db.query(FlatUser).filter_by(user_id=user_id, role="primary").first()
+        pending = []
+        if requester:
+            pending_users = db.query(User).filter_by(requested_flat_id=requester.flat_id, status="pending_verification").all()
+            for pu in pending_users:
+                # Include all pending users requesting this flat, whether added via login or resident dashboard
+                role_label = pu.requested_role if pu.requested_role else "resident"
+                
+                # Mock a FlatUser dict structure for the frontend
+                pending.append({
+                    "id": f"pending_{pu.id}",
+                    "user_id": pu.id,
+                    "role": role_label,
+                    "status": "pending",
+                    "user": pu.to_dict()
+                })
+                    
+        data = [m.to_dict() for m in members] + pending
+        return success("Flat members fetched", data=data)
     except AppException as e:
         return error(e.message, e.code, e.details, e.status_code)
     except Exception as e:

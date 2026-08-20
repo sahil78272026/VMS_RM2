@@ -59,13 +59,16 @@ class FlatUserService:
         if isinstance(move_in, str):
             move_in = date.fromisoformat(move_in)
             
+        role = user.requested_role or "primary"
+        can_approve = True if role == "primary" else False
+
         flat_user = FlatUser(
             society_id   = society_id,
             user_id      = user_id,
             flat_id      = flat_id,
-            role         = "primary",
-            is_owner     = data.get("is_owner", False),
-            can_approve  = True,
+            role         = role,
+            is_owner     = data.get("is_owner", False) if role == "primary" else False,
+            can_approve  = can_approve,
             move_in_date = move_in,
         )
         self.repo.save(flat_user)
@@ -103,12 +106,23 @@ class FlatUserService:
         existing_user = self.user_repo.get_by_phone(data["phone"])
         if existing_user:
             new_user = existing_user
+            # If user exists but is trying to be added as a family member,
+            # we should also put them into pending verification for the admin to approve
+            new_user.status = "pending_verification"
+            new_user.requested_flat_id = requester.flat_id
+            new_user.requested_role = data["relation"]
+            self.user_repo.save(new_user)
         else:
-            # Create user account for family member
+            # Create user account for family member as pending
             temp_password = data.get("password", data["phone"][-4:] + "@rm2")
             password_hash = bcrypt.hashpw(
                 temp_password.encode("utf-8"), bcrypt.gensalt()
             ).decode("utf-8")
+
+            from datetime import date
+            move_in = data["move_in_date"]
+            if isinstance(move_in, str):
+                move_in = date.fromisoformat(move_in)
 
             new_user = User(
                 name          = data["name"].strip(),
@@ -116,28 +130,15 @@ class FlatUserService:
                 email         = data.get("email"),
                 password_hash = password_hash,
                 role          = "resident",
-                status        = "active",
+                status        = "pending_verification",
+                requested_flat_id = requester.flat_id,
+                requested_role = data["relation"],
+                move_in_date  = move_in,
             )
             self.user_repo.save(new_user)
 
-        from datetime import date
-        move_in = data["move_in_date"]
-        if isinstance(move_in, str):
-            move_in = date.fromisoformat(move_in)
-
-        flat_user = FlatUser(
-            society_id   = requester.society_id,
-            user_id      = new_user.id,
-            flat_id      = requester.flat_id,
-            role         = data["relation"],  # spouse, parent, child, sibling
-            is_owner     = False,
-            can_approve  = False,  # Only primary members can approve visitors
-            move_in_date = move_in,
-        )
-        self.repo.save(flat_user)
-
-        logger.info(f"[FLAT_USER] Family member added — {new_user.name} → flat {requester.flat_id} in society {requester.society_id}")
-        return flat_user
+        logger.info(f"[FLAT_USER] Family member requested — {new_user.name} → flat {requester.flat_id} in society {requester.society_id}")
+        return new_user
 
     def update_member(self, requesting_user_id: int, flat_user_id: int, data: dict):
         """Resident/Admin updates a flat member's details."""

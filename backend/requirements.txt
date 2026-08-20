@@ -19,4 +19,3 @@ requests==2.31.0
 boto3==1.43.29
 apscheduler==3.10.4
 aiofiles==25.1.0
-easyocr

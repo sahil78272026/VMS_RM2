@@ -30,6 +30,7 @@ export const SocietyService = {
   delete: (id: number | string) => api.delete(`/societies/${id}`),
   getDonations: (society_id: number | string) => api.get(`/societies/${society_id}/donations`),
   verifyDonation: (society_id: number | string, donation_id: number | string) => api.patch(`/societies/${society_id}/donations/${donation_id}/verify`),
+  rejectDonation: (society_id: number | string, donation_id: number | string) => api.patch(`/societies/${society_id}/donations/${donation_id}/reject`),
 };
 
 export const FlatService = {
@@ -160,10 +161,10 @@ export const HelpdeskService = {
 };
 
 export const OCRService = {
-  scanUtr: async (d: any) => {
+  uploadReceipt: async (d: any) => {
     const token = await AsyncStorage.getItem('access_token');
     const activeSocietyId = await AsyncStorage.getItem('active_society_id');
-    const res = await fetch(`${api.defaults.baseURL}/ocr/scan-utr`, {
+    const res = await fetch(`${api.defaults.baseURL}/ocr/upload-receipt`, {
       method: 'POST',
       body: d,
       headers: {

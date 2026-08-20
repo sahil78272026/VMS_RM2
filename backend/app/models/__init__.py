@@ -176,6 +176,7 @@ class User(Base):
     status         = Column(Enum("active", "inactive", "pending_verification", name="user_status"), default="pending_verification", nullable=False)
     is_super_admin = Column(Boolean, default=False, nullable=False)
     requested_flat_id = Column(Integer, ForeignKey("flats.id"), nullable=True)
+    requested_role    = Column(String(50), nullable=True)
     expo_push_token   = Column(String(255), nullable=True)
     move_in_date   = Column(Date, nullable=True)
     created_at     = Column(DateTime, default=datetime.utcnow, nullable=False)

@@ -293,6 +293,26 @@ def verify_donation(
         "data": donation.to_dict()
     }
 
+@router.patch("/{society_id}/donations/{donation_id}/reject")
+def reject_donation(
+    society_id: int,
+    donation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_society_admin)
+):
+    donation = db.query(SocietyDonation).filter(SocietyDonation.id == donation_id, SocietyDonation.society_id == society_id).first()
+    if not donation:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Donation not found")
+    
+    donation.status = "rejected"
+    db.commit()
+    return {
+        "success": True,
+        "message": "Donation rejected",
+        "data": donation.to_dict()
+    }
+
 # ── Super Admin Society Lifecycle Endpoints ─────────────────────────────────
 
 @router.post("/{society_id}/suspend")

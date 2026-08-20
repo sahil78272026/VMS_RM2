@@ -247,10 +247,20 @@ export function AdminDashboard({ navigation }: any) {
   const verifyDonation = async (id: string) => {
     try {
       await SocietyService.verifyDonation(activeSocietyId, id);
-      Toast.show({ type: 'success', text1: 'Verified', text2: 'Donation has been verified.' });
       load();
-    } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to verify donation' });
+      Toast.show({ type: 'success', text1: 'Verified', text2: 'Donation verified successfully.' });
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: e.response?.data?.message || 'Failed to verify' });
+    }
+  };
+
+  const rejectDonation = async (id: string) => {
+    try {
+      await SocietyService.rejectDonation(activeSocietyId, id);
+      load();
+      Toast.show({ type: 'success', text1: 'Rejected', text2: 'Donation rejected.' });
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: e.response?.data?.message || 'Failed to reject' });
     }
   };
 
@@ -363,7 +373,8 @@ export function AdminDashboard({ navigation }: any) {
 
   const renderContent = () => {
     if (currentTab === 'dashboard') {
-      const totalPendingActions = pendingResidents.length + pendingPayments.length;
+      const pendingDonationsCount = donations.filter(d => d.status === 'pending').length;
+      const totalPendingActions = pendingResidents.length + pendingPayments.length + pendingDonationsCount;
 
       return (
         <View>
@@ -406,7 +417,7 @@ export function AdminDashboard({ navigation }: any) {
                     </Text>
                   </TouchableOpacity>
                 )}
-                {pendingPayments.length > 0 && (
+                {(pendingPayments.length > 0 || pendingDonationsCount > 0) && (
                   <TouchableOpacity
                     onPress={() => setCurrentTab('directory')}
                     style={{
@@ -418,7 +429,7 @@ export function AdminDashboard({ navigation }: any) {
                     }}
                   >
                     <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12 }}>
-                      Review Payments ({pendingPayments.length})
+                      Review Payments ({pendingPayments.length + pendingDonationsCount})
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -533,6 +544,27 @@ export function AdminDashboard({ navigation }: any) {
               <View style={{ flex: 1 }}>
                 <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>Maintenance & Dues</Text>
                 <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 1 }}>{pendingPayments.length} receipts awaiting review</Text>
+              </View>
+              <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 14 }}>→</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setCurrentTab('directory')}
+              style={{
+                backgroundColor: Warm.cardSubtle,
+                borderColor: Warm.cardBorder,
+                borderWidth: 1,
+                borderRadius: 14,
+                padding: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginBottom: 10,
+              }}
+            >
+              <Text style={{ fontSize: 22, marginRight: 12 }}>🎁</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>Society Donations</Text>
+                <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 1 }}>{pendingDonationsCount} donations awaiting review</Text>
               </View>
               <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 14 }}>→</Text>
             </TouchableOpacity>
@@ -747,6 +779,20 @@ export function AdminDashboard({ navigation }: any) {
 
                   <View style={{ flexDirection: 'row', marginTop: 14, gap: 10 }}>
                     <TouchableOpacity
+                      onPress={() => rejectDonation(p.id)}
+                      style={{
+                        flex: 1,
+                        backgroundColor: Warm.redDim,
+                        borderColor: Warm.red + '44',
+                        borderWidth: 1,
+                        borderRadius: 12,
+                        paddingVertical: 10,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ color: Warm.red, fontWeight: '700', fontSize: 13 }}>✕ Reject</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
                       onPress={() => verifyDonation(p.id)}
                       style={{
                         flex: 1,
@@ -868,6 +914,51 @@ export function AdminDashboard({ navigation }: any) {
               <Text style={{ color: Warm.text, fontWeight: '700', fontSize: 13 }}>Load More Flats ({maintenanceFlats.length} loaded)</Text>
             </TouchableOpacity>
           )}
+
+          {/* Historical Donations Log */}
+          <View style={{ marginTop: 24, marginBottom: 12 }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginBottom: 4 }}>
+              Society Welfare Fund (Donations)
+            </Text>
+            <Text style={{ fontSize: 12, color: Warm.textMuted }}>
+              Total Verified Funds: ₹{donations.filter((d: any) => d.status === 'verified').reduce((acc: number, cur: any) => acc + (parseFloat(cur.amount) || 0), 0)}
+            </Text>
+          </View>
+          
+          {donations.filter((d: any) => d.status === 'verified').length === 0 ? (
+            <EmptyState icon="🎁" title="No Donations Yet" message="Approved donations will appear here." />
+          ) : (
+            donations.filter((d: any) => d.status === 'verified').map((d: any) => (
+              <View
+                key={d.id}
+                style={{
+                  backgroundColor: Warm.cardBg,
+                  borderColor: Warm.cardBorder,
+                  borderWidth: 1,
+                  borderRadius: 16,
+                  padding: 16,
+                  marginBottom: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  ...Warm.shadow,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: '800', color: Warm.text, fontSize: 15 }}>{d.user_name}</Text>
+                  <Text style={{ color: Warm.textMuted, fontSize: 12, marginTop: 2 }}>{d.purpose}</Text>
+                  <Text style={{ color: Warm.textDim, fontSize: 11, marginTop: 4 }}>{formatDate(new Date(d.created_at))}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontWeight: '800', color: Warm.green, fontSize: 18 }}>+ ₹{d.amount}</Text>
+                  <View style={{ backgroundColor: Warm.greenDim, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, marginTop: 4 }}>
+                    <Text style={{ color: Warm.green, fontSize: 10, fontWeight: '800' }}>VERIFIED</Text>
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
+
         </View>
       );
     }
