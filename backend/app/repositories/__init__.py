@@ -336,25 +336,39 @@ class VisitorLogRepository(BaseRepository):
         self.db = db
         super().__init__(VisitorLog, db)
 
+    def _with_relations(self, query):
+        """
+        Performance optimization: Eager load relationships to prevent N+1 queries
+        when VisitorLog.to_dict() is called to serialize these records.
+        """
+        return query.options(
+            joinedload(VisitorLog.visitor),
+            joinedload(VisitorLog.flat),
+            joinedload(VisitorLog.flat_user),
+            joinedload(VisitorLog.entry_gate)
+        )
+
     def get_pending_for_flat(self, flat_id: int) -> List[VisitorLog]:
-        return self.db.query(VisitorLog).filter_by(
+        q = self.db.query(VisitorLog).filter_by(
             flat_id=flat_id,
             approval_status="pending"
-        ).order_by(VisitorLog.created_at.desc()).all()
+        ).order_by(VisitorLog.created_at.desc())
+        return self._with_relations(q).all()
 
     def get_inside(self, society_id: int = None) -> List[VisitorLog]:
         """Everyone currently inside the society."""
         q = self.db.query(VisitorLog).filter_by(status="inside")
         if society_id:
             q = q.filter_by(society_id=society_id)
-        return q.all()
+        return self._with_relations(q).all()
 
     def get_inside_for_gate(self, gate_id: int) -> List[VisitorLog]:
         """Visitors expected to exit from a specific gate."""
-        return self.db.query(VisitorLog).filter_by(
+        q = self.db.query(VisitorLog).filter_by(
             status="inside",
             expected_exit_gate_id=gate_id
-        ).all()
+        )
+        return self._with_relations(q).all()
 
     def get_overdue(self, society_id: int = None) -> List[VisitorLog]:
         """Visitors whose expected exit time has passed."""
@@ -364,20 +378,22 @@ class VisitorLogRepository(BaseRepository):
         )
         if society_id:
             q = q.filter_by(society_id=society_id)
-        return q.all()
+        return self._with_relations(q).all()
 
     def get_by_flat(self, flat_id: int, page: int = 1, per_page: int = 20):
         q = self.db.query(VisitorLog).filter_by(flat_id=flat_id).order_by(
             VisitorLog.created_at.desc()
         )
+        q = self._with_relations(q)
         return self.paginate(page=page, per_page=per_page, query=q)
 
     def get_today_for_society(self, society_id: int) -> List[VisitorLog]:
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        return self.db.query(VisitorLog).filter(
+        q = self.db.query(VisitorLog).filter(
             VisitorLog.society_id == society_id,
             (VisitorLog.created_at >= today_start) | (VisitorLog.actual_exit_at >= today_start) | (VisitorLog.entered_at >= today_start)
-        ).order_by(VisitorLog.created_at.desc()).all()
+        ).order_by(VisitorLog.created_at.desc())
+        return self._with_relations(q).all()
 
     def get_all_filtered(self, filters: dict, page: int = 1, per_page: int = 20, society_id: int = None):
         q = self.db.query(VisitorLog)
@@ -393,6 +409,7 @@ class VisitorLogRepository(BaseRepository):
         if filters.get("to_date"):
             q = q.filter(VisitorLog.created_at <= filters["to_date"])
         q = q.order_by(VisitorLog.created_at.desc())
+        q = self._with_relations(q)
         return self.paginate(page=page, per_page=per_page, query=q)
 
 
