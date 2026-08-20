@@ -1,0 +1,3 @@
+## 2024-05-18 - [N+1 Query Bottleneck in Visitor Logs]
+**Learning:** The backend SQLAlchemy models have a recurring architectural pattern where `to_dict()` serialization triggers N+1 query performance bottlenecks on lazy-loaded relationships. This happens because the `to_dict()` method serializes nested objects (e.g. `self.visitor.to_dict()`) which, if not eagerly loaded, results in additional DB queries per item.
+**Action:** Mitigate by applying `joinedload` eager loading in repository queries when retrieving lists of objects that will be serialized with `to_dict()`, particularly for relationships like `visitor`, `flat`, `flat_user`, and `entry_gate` in the `VisitorLog` model.
