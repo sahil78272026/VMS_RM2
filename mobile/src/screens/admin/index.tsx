@@ -704,7 +704,7 @@ export function AdminDashboard({ navigation }: any) {
                     UTR / Reference: {p.utr_number}
                   </Text>
                   {p.proof_url && (
-                    <Text style={{ color: Warm.accent, fontSize: 12, marginTop: 4, fontWeight: '600' }} onPress={() => Linking.openURL(p.proof_url.startsWith('http') ? p.proof_url : (api.defaults.baseURL.replace('/api/v1', '') + p.proof_url))}>
+                    <Text style={{ color: Warm.accent, fontSize: 12, marginTop: 4, fontWeight: '600' }} onPress={() => Linking.openURL(p.proof_url.startsWith('http') ? p.proof_url : ((api.defaults.baseURL || '').replace('/api/v1', '') + p.proof_url))}>
                       🔗 View Payment Screenshot
                     </Text>
                   )}
@@ -772,7 +772,7 @@ export function AdminDashboard({ navigation }: any) {
                     {formatTimestamp(p.created_at)}
                   </Text>
                   {p.receipt_url && (
-                    <Text style={{ color: Warm.accent, fontSize: 12, marginTop: 4, fontWeight: '600' }} onPress={() => Linking.openURL(p.receipt_url.startsWith('http') ? p.receipt_url : (api.defaults.baseURL.replace('/api/v1', '') + p.receipt_url))}>
+                    <Text style={{ color: Warm.accent, fontSize: 12, marginTop: 4, fontWeight: '600' }} onPress={() => Linking.openURL(p.receipt_url.startsWith('http') ? p.receipt_url : ((api.defaults.baseURL || '').replace('/api/v1', '') + p.receipt_url))}>
                       🔗 View Donation Screenshot
                     </Text>
                   )}

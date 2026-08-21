@@ -5,8 +5,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { VisitorLogService, PreApprovalService, FrequentPassService, MaintenanceService, AnnouncementService, FlatUserService, AmenityService, UserService, HelpdeskService, OCRService } from '../../services';
-import { T, Card, Badge, Avatar, Btn, Input, Select, PageLayout, StatCard, EmptyState, LoadingScreen, Modal, Tabs, Calendar, SocietySwitcher, QuickActionTile } from '../../components/UI';
+import { VisitorLogService, PreApprovalService, FrequentPassService, MaintenanceService, AnnouncementService, FlatUserService, AmenityService, UserService, HelpdeskService, OCRService, AuthService, SocietyService } from '../../services';
+import { T, Card, Badge, Avatar, Btn, Input, Select, PageLayout, StatCard, EmptyState, LoadingScreen, Modal, Tabs, Calendar, SocietySwitcher, QuickActionTile, SearchableSelect } from '../../components/UI';
 import { useAuth } from '../../context/AuthContext';
 import api, { BASE_URL } from '../../services/api';
 import { formatTimestamp, formatDate } from '../../utils/date';
@@ -46,6 +46,25 @@ export function ResidentDashboard({ route }: any) {
   const { user, logout, activeSociety, activeSocietyId } = useAuth();
   const [currentTab, setCurrentTab] = useState(route?.params?.tab || 'home');
   const [showCalendar, setShowCalendar] = useState(false);
+  const hasAlertedRef = useRef(false);
+
+  const [confirmConfig, setConfirmConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    actionText: string;
+    actionFn: (() => void) | null;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    actionText: 'Confirm',
+    actionFn: null
+  });
+
+  const promptConfirm = (title: string, message: string, actionText: string, actionFn: () => void) => {
+    setConfirmConfig({ visible: true, title, message, actionText, actionFn });
+  };
 
   const tabOrder = ['home', 'dashboard', 'history', 'passes', 'services', 'profile'];
   const currentTabRef = useRef(currentTab);
@@ -100,6 +119,12 @@ export function ResidentDashboard({ route }: any) {
   const [payments, setPayments] = useState<any[]>([]);
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [passes, setPasses] = useState<any[]>([]);
+
+  const [reqModalVisible, setReqModalVisible] = useState(false);
+  const [reqSocietyId, setReqSocietyId] = useState<number | null>(null);
+  const [reqFlatId, setReqFlatId] = useState<number | null>(null);
+  const [socOptions, setSocOptions] = useState<any[]>([]);
+  const [flatOptions, setFlatOptions] = useState<any[]>([]);
   const [preApprovals, setPreApprovals] = useState<any[]>([]);
   const [pendingFamily, setPendingFamily] = useState<any[]>([]);
   const [flatMembers, setFlatMembers] = useState<any[]>([]);
@@ -114,6 +139,8 @@ export function ResidentDashboard({ route }: any) {
   const [loading, setLoading] = useState(true);
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const [modal, setModal] = useState<any>(null);
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
+  const [showOccupancyModal, setShowOccupancyModal] = useState(false);
   const [form, setForm] = useState<any>({});
   const [refreshing, setRefreshing] = useState(false);
   const [notificationsMuted, setNotificationsMuted] = useState(user?.notifications_muted || false);
@@ -201,6 +228,21 @@ export function ResidentDashboard({ route }: any) {
       setFlatMembers(allMembers);
       const me = allMembers.find((m: any) => m.user_id === user?.id);
       setMyFlatUser(me || null);
+
+      if (!me && activeSocietyId && !hasAlertedRef.current) {
+        hasAlertedRef.current = true;
+        if (Platform.OS === 'web') {
+          window.alert("Access Revoked: You have been removed from this flat by the primary resident.");
+          logout();
+        } else {
+          Alert.alert(
+            "Access Revoked",
+            "You have been removed from this flat by the primary resident.",
+            [{ text: "OK", onPress: logout }]
+          );
+        }
+      }
+
       setServices(srv.data?.data || []);
       setHelpdeskTickets(hr.data?.data?.items || hr.data?.data || []);
     } catch {}
@@ -227,6 +269,40 @@ export function ResidentDashboard({ route }: any) {
       Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed' });
     }
   };
+
+  const handleRequestFlat = async () => {
+    if (!reqFlatId) return Toast.show({ type: 'error', text1: 'Error', text2: 'Please select a flat' });
+    try {
+      await AuthService.requestFlat(reqFlatId);
+      Toast.show({ type: 'success', text1: 'Request Sent', text2: 'Wait for admin approval' });
+      setReqModalVisible(false);
+      // Wait a moment then log out so they can see the pending screen or clear state
+      setTimeout(logout, 1500);
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed' });
+    }
+  };
+
+  useEffect(() => {
+    if (reqModalVisible) {
+      SocietyService.getAll().then(res => {
+        setSocOptions((res.data?.data?.items || []).map((s: any) => ({ label: s.name, value: s.id })));
+      }).catch(() => {});
+    }
+  }, [reqModalVisible]);
+
+  useEffect(() => {
+    if (reqSocietyId) {
+      SocietyService.getById(reqSocietyId).then(res => {
+        const flats = res.data?.data?.flats || [];
+        flats.sort((a: any, b: any) => a.flat_number.localeCompare(b.flat_number, undefined, { numeric: true, sensitivity: 'base' }));
+        setFlatOptions(flats.map((f: any) => ({ label: f.flat_number, value: f.id })));
+      }).catch(() => {});
+    } else {
+      setFlatOptions([]);
+      setReqFlatId(null);
+    }
+  }, [reqSocietyId]);
 
   const deny = async (id: string) => {
     try {
@@ -327,36 +403,37 @@ export function ResidentDashboard({ route }: any) {
     }
   };
 
-  const handleRemoveMember = async (id: string) => {
-    try {
-      await FlatUserService.remove(id);
-      Toast.show({ type: 'success', text1: 'Success', text2: 'Member removed from flat' });
-      load();
-    } catch (e: any) {
-      Toast.show({ type: 'error', text1: 'Error', text2: e.response?.data?.message || 'Failed to remove member' });
-    }
+  const handleRemoveMember = (id: string, name: string) => {
+    promptConfirm(
+      "Remove Member?",
+      `Are you sure you want to remove ${name || 'this member'}? They will immediately lose access to this flat.`,
+      "Yes, Remove",
+      async () => {
+        try {
+          await FlatUserService.remove(id);
+          Toast.show({ type: 'success', text1: 'Success', text2: 'Member removed from flat' });
+          load();
+        } catch (e: any) {
+          Toast.show({ type: 'error', text1: 'Error', text2: e.response?.data?.message || 'Failed to remove member' });
+        }
+      }
+    );
   };
 
-  const handleMoveOut = async () => {
-    Alert.alert(
-      "Confirm Move Out",
-      "Are you sure you want to move out? You will lose access to this flat.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Move Out", 
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await FlatUserService.moveOut();
-              Toast.show({ type: 'success', text1: 'Moved Out', text2: 'You have been moved out successfully' });
-              logout(); // Log out or refresh to trigger "No Active Flat" fallback
-            } catch (e: any) {
-              Toast.show({ type: 'error', text1: 'Error', text2: e.response?.data?.message || 'Failed to move out' });
-            }
-          }
+  const handleMoveOut = () => {
+    promptConfirm(
+      "Move Out?",
+      "Are you sure you want to move out? You will instantly lose access to this flat and its dashboard.",
+      "Yes, Move Out",
+      async () => {
+        try {
+          await FlatUserService.moveOut();
+          Toast.show({ type: 'success', text1: 'Moved Out', text2: 'You have been moved out successfully' });
+          logout(); 
+        } catch (e: any) {
+          Toast.show({ type: 'error', text1: 'Error', text2: e.response?.data?.message || 'Failed to move out' });
         }
-      ]
+      }
     );
   };
 
@@ -436,13 +513,21 @@ export function ResidentDashboard({ route }: any) {
     }
   };
 
-  const cancelPre = async (id: string) => {
-    try {
-      await PreApprovalService.cancel(id);
-      load();
-    } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to cancel' });
-    }
+  const cancelPre = (id: string) => {
+    promptConfirm(
+      "Cancel Pre-Approval?",
+      "Are you sure you want to cancel this pre-approval?",
+      "Yes, Cancel",
+      async () => {
+        try {
+          await PreApprovalService.cancel(id);
+          Toast.show({ type: 'success', text1: 'Success', text2: 'Cancelled successfully' });
+          load();
+        } catch (err: any) {
+          Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to cancel' });
+        }
+      }
+    );
   };
 
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -543,31 +628,8 @@ export function ResidentDashboard({ route }: any) {
             </Text>
           </View>
 
-          {/* 3. Society Maintenance & Status Card (Only shown if payment is due) */}
-          {hasPendingPayment ? (
-            <View style={{
-              marginBottom: 20,
-              backgroundColor: '#FEF9C3',
-              borderColor: '#FDE047',
-              borderWidth: 1.5,
-              borderRadius: 20,
-              padding: 18,
-              ...Warm.shadow,
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 15 }}>⏳</Text>
-                <Text style={{ fontSize: 11, color: '#A16207', textTransform: 'uppercase', fontWeight: '800', letterSpacing: 0.5 }}>
-                  Payment Pending Approval
-                </Text>
-              </View>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginTop: 3 }}>
-                Admin review in progress
-              </Text>
-              <Text style={{ color: Warm.textDim, fontSize: 12, marginTop: 2 }}>
-                Your payment receipt has been submitted and is currently awaiting verification from the society admin.
-              </Text>
-            </View>
-          ) : isMaintenanceExpired ? (
+          {/* 3. Society Maintenance & Status Card (Only shown if payment is due and not pending) */}
+          {!hasPendingPayment && isMaintenanceExpired ? (
             <View style={{
               marginBottom: 20,
               backgroundColor: '#FEF2F2',
@@ -1268,8 +1330,33 @@ export function ResidentDashboard({ route }: any) {
             <Text style={{ color: Warm.accent, fontSize: 15, fontWeight: '800', marginTop: 12 }}>
               🏢 {activeSociety?.name || 'RM2 Residency'} · Flat {activeFlatNumber}
             </Text>
-            <View style={{ backgroundColor: Warm.accentDim, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginTop: 10 }}>
-              <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 11 }}>VERIFIED RESIDENT</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 }}>
+              <View style={{ backgroundColor: Warm.accentDim, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
+                <Text style={{ color: Warm.accent, fontWeight: '800', fontSize: 11 }}>VERIFIED RESIDENT</Text>
+              </View>
+              {myFlatUser && (
+                <TouchableOpacity
+                  onPress={() => myFlatUser.role === 'primary' && setShowOccupancyModal(true)}
+                  disabled={myFlatUser.role !== 'primary'}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderColor: Warm.cardBorder,
+                    borderWidth: 1,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Text style={{ fontSize: 13 }}>{myFlatUser.is_owner ? '👑' : '🏠'}</Text>
+                  <Text style={{ color: Warm.text, fontWeight: '800', fontSize: 11 }}>{myFlatUser.is_owner ? 'OWNER' : 'TENANT'}</Text>
+                  {myFlatUser.role === 'primary' && (
+                    <Text style={{ color: Warm.textMuted, fontSize: 10, marginLeft: 2 }}>▼</Text>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           </View>
           <View style={{
@@ -1281,9 +1368,14 @@ export function ResidentDashboard({ route }: any) {
             padding: 20,
             ...Warm.shadow,
           }}>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: Warm.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Maintenance Dues Status
-            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: Warm.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Maintenance Dues Status
+              </Text>
+              <TouchableOpacity onPress={() => setShowPaymentHistory(true)} style={{ backgroundColor: Warm.cardSubtle, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                <Text style={{ color: Warm.text, fontWeight: '700', fontSize: 10 }}>View History →</Text>
+              </TouchableOpacity>
+            </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <View>
                 <Text style={{ fontSize: 24, fontWeight: '800', color: isMaintenanceExpired ? Warm.red : Warm.text }}>
@@ -1335,46 +1427,7 @@ export function ResidentDashboard({ route }: any) {
             )}
           </View>
           
-          {myFlatUser && (
-            <View style={{ marginTop: 24, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 20, borderColor: Warm.cardBorder, borderWidth: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: Warm.text, marginBottom: 12 }}>
-                Occupancy Status
-              </Text>
-              <Text style={{ fontSize: 13, color: Warm.textMuted, marginBottom: 16 }}>
-                Are you renting this flat, or are you the owner?
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TouchableOpacity
-                  onPress={() => updateOwnerStatus(false)}
-                  style={{
-                    flex: 1,
-                    padding: 12,
-                    borderRadius: 12,
-                    backgroundColor: myFlatUser.is_owner ? '#F8F6F2' : Warm.accent,
-                    borderColor: myFlatUser.is_owner ? Warm.cardBorder : Warm.accent,
-                    borderWidth: 1,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ fontWeight: '800', color: myFlatUser.is_owner ? Warm.textMuted : '#FFF' }}>Tenant</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => updateOwnerStatus(true)}
-                  style={{
-                    flex: 1,
-                    padding: 12,
-                    borderRadius: 12,
-                    backgroundColor: myFlatUser.is_owner ? Warm.accent : '#F8F6F2',
-                    borderColor: myFlatUser.is_owner ? Warm.accent : Warm.cardBorder,
-                    borderWidth: 1,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ fontWeight: '800', color: myFlatUser.is_owner ? '#FFF' : Warm.textMuted }}>Owner</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
+
 
 
 
@@ -1512,7 +1565,7 @@ export function ResidentDashboard({ route }: any) {
                        </TouchableOpacity>
                        {fm.role !== 'primary' && (
                          <TouchableOpacity
-                           onPress={() => handleRemoveMember(fm.id)}
+                           onPress={() => handleRemoveMember(fm.id, fm.user?.name || fm.user_name || fm.name || 'this member')}
                            style={{
                              backgroundColor: Warm.redDim,
                              paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8
@@ -1566,6 +1619,14 @@ export function ResidentDashboard({ route }: any) {
     }
   };
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Warm.bg, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={Warm.accent} />
+      </View>
+    );
+  }
+
   if (user?.status === 'pending_verification') {
     return (
       <View style={{ flex: 1, backgroundColor: Warm.bg, justifyContent: 'center', padding: 24 }}>
@@ -1583,19 +1644,12 @@ export function ResidentDashboard({ route }: any) {
     );
   }
 
-  if (!activeSocietyId && !loading) {
+  if ((!activeSocietyId || !myFlatUser) && !loading) {
+    // If they have been removed, the Alert will pop up and force logout. 
+    // We just show a loading screen here to prevent the actual dashboard from rendering.
     return (
-      <View style={{ flex: 1, backgroundColor: Warm.bg, justifyContent: 'center', padding: 24 }}>
-        <Card style={{ padding: 24, alignItems: 'center' }}>
-          <Text style={{ fontSize: 40, marginBottom: 16 }}>🏠</Text>
-          <Text style={{ fontSize: 20, fontWeight: '800', color: Warm.text, marginBottom: 8, textAlign: 'center' }}>
-            No Active Flat
-          </Text>
-          <Text style={{ color: Warm.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
-            You are not currently assigned to any flat. If you were recently removed, you can request to join another flat by registering again, or ask a Primary Resident to add you directly.
-          </Text>
-          <Btn full onClick={logout} variant="outline">Sign Out</Btn>
-        </Card>
+      <View style={{ flex: 1, backgroundColor: Warm.bg, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={Warm.accent} />
       </View>
     );
   }
@@ -1958,6 +2012,81 @@ export function ResidentDashboard({ route }: any) {
           </Btn>
         </Modal>
       )}
+      {/* Payment History Modal */}
+      {showPaymentHistory && (
+        <Modal title="Payment History" onClose={() => setShowPaymentHistory(false)}>
+          <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
+            {payments.length === 0 ? (
+              <EmptyState icon="🧾" title="No History" message="You haven't made any maintenance payments yet." />
+            ) : (
+              payments.map(p => (
+                <View key={p.id} style={{
+                  backgroundColor: '#FFFFFF',
+                  padding: 16,
+                  borderRadius: 16,
+                  borderColor: Warm.cardBorder,
+                  borderWidth: 1,
+                  marginBottom: 12,
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <View>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: Warm.text }}>
+                      ₹{p.amount}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: Warm.textMuted, marginTop: 4 }}>
+                      {formatDate(p.created_at)}
+                    </Text>
+                  </View>
+                  <View style={{
+                    backgroundColor: p.status === 'approved' ? Warm.greenDim : (p.status === 'rejected' ? Warm.redDim : Warm.amberDim),
+                    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8
+                  }}>
+                    <Text style={{
+                      fontSize: 10, fontWeight: '800', textTransform: 'uppercase',
+                      color: p.status === 'approved' ? Warm.green : (p.status === 'rejected' ? Warm.red : Warm.amber)
+                    }}>
+                      {p.status}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </Modal>
+      )}
+
+      {/* Occupancy Status Modal */}
+      {showOccupancyModal && (
+        <Modal title="Occupancy Status" subtitle="Are you renting this flat or are you the owner?" onClose={() => setShowOccupancyModal(false)}>
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 10, marginBottom: 20 }}>
+            <TouchableOpacity
+              onPress={() => { updateOwnerStatus(false); setShowOccupancyModal(false); }}
+              style={{
+                flex: 1, padding: 16, borderRadius: 12, borderWidth: 2, alignItems: 'center',
+                borderColor: !myFlatUser?.is_owner ? Warm.accent : Warm.cardBorder,
+                backgroundColor: !myFlatUser?.is_owner ? Warm.accentDim : '#FFF'
+              }}
+            >
+              <Text style={{ fontSize: 24, marginBottom: 8 }}>🏠</Text>
+              <Text style={{ fontWeight: '800', color: !myFlatUser?.is_owner ? Warm.accent : Warm.textMuted }}>Tenant</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => { updateOwnerStatus(true); setShowOccupancyModal(false); }}
+              style={{
+                flex: 1, padding: 16, borderRadius: 12, borderWidth: 2, alignItems: 'center',
+                borderColor: myFlatUser?.is_owner ? Warm.accent : Warm.cardBorder,
+                backgroundColor: myFlatUser?.is_owner ? Warm.accentDim : '#FFF'
+              }}
+            >
+              <Text style={{ fontSize: 24, marginBottom: 8 }}>👑</Text>
+              <Text style={{ fontWeight: '800', color: myFlatUser?.is_owner ? Warm.accent : Warm.textMuted }}>Owner</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+      )}
+
     </View>
   );
 }

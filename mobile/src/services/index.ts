@@ -12,6 +12,7 @@ export const AuthService = {
   changePassword: (d: any) => api.post('/auth/change-password', d),
   getMySocieties: () => api.get('/auth/my-societies'),
   switchSociety: (society_id: number) => api.post('/auth/switch-society', { society_id }),
+  requestFlat: (flat_id: number) => api.post('/auth/request-flat', { flat_id }),
 };
 
 export const SocietyService = {
