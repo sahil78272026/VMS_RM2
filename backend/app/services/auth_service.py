@@ -29,35 +29,51 @@ class AuthService:
         self.society_repo = SocietyRepository(db)
 
     def register_resident(self, data: RegisterResidentRequest) -> dict:
-        if self.user_repo.phone_exists(data.phone):
-            raise DuplicateEntryError("Phone number already registered", field="phone")
+        existing_user = self.user_repo.get_by_phone(data.phone)
+        if existing_user:
+            if existing_user.status != "pending_verification":
+                user_societies = self.get_user_societies(existing_user)
+                if user_societies:
+                    raise DuplicateEntryError("Phone number already registered and active in a society.", field="phone")
 
-        if data.email and self.user_repo.email_exists(data.email):
-            raise DuplicateEntryError("Email already registered", field="email")
-
-        import secrets
-        raw_password = data.password or secrets.token_urlsafe(16)
-        password_hash = bcrypt.hashpw(
-            raw_password.encode("utf-8"),
-            bcrypt.gensalt()
-        ).decode("utf-8")
+        if data.email:
+            email_user = self.user_repo.get_by_email(data.email)
+            if email_user and email_user.id != (existing_user.id if existing_user else None):
+                raise DuplicateEntryError("Email already registered", field="email")
 
         from datetime import date
         move_in = date.fromisoformat(data.move_in_date) if data.move_in_date else date.today()
-        
-        user = User(
-            name          = data.name.strip() if data.name else "Resident",
-            phone         = data.phone.strip(),
-            email         = data.email.strip() if data.email else None,
-            password_hash = password_hash,
-            role          = "resident",
-            status        = "pending_verification",
-            requested_flat_id = data.flat_id,
-            move_in_date  = move_in,
-        )
 
-        self.user_repo.save(user)
-        logger.info(f"[AUTH] New resident registered: {user.phone}")
+        if existing_user:
+            user = existing_user
+            user.name = data.name.strip() if data.name else user.name
+            if data.email:
+                user.email = data.email.strip()
+            user.requested_flat_id = data.flat_id
+            user.move_in_date = move_in
+            user.status = "pending_verification"
+            self.user_repo.save(user)
+            logger.info(f"[AUTH] Existing resident re-registered for new flat: {user.phone}")
+        else:
+            import secrets
+            raw_password = data.password or secrets.token_urlsafe(16)
+            password_hash = bcrypt.hashpw(
+                raw_password.encode("utf-8"),
+                bcrypt.gensalt()
+            ).decode("utf-8")
+
+            user = User(
+                name          = data.name.strip() if data.name else "Resident",
+                phone         = data.phone.strip(),
+                email         = data.email.strip() if data.email else None,
+                password_hash = password_hash,
+                role          = "resident",
+                status        = "pending_verification",
+                requested_flat_id = data.flat_id,
+                move_in_date  = move_in,
+            )
+            self.user_repo.save(user)
+            logger.info(f"[AUTH] New resident registered: {user.phone}")
 
         from app.models import Flat
         flat = self.db.query(Flat).filter_by(id=data.flat_id).first()
@@ -198,8 +214,9 @@ class AuthService:
             raise InvalidCredentialsError("Invalid or expired verification code. Please try again.")
 
         user = self.user_repo.get_by_phone(phone_clean)
-        if not user:
-            # New unregistered user
+        
+        # Check if they are a completely new user OR an existing user with NO active societies (e.g. removed member)
+        if not user or (not self.get_user_societies(user) and not user.is_super_admin and user.status != "pending_verification"):
             return {
                 "is_new_user": True,
                 "phone": phone_clean,

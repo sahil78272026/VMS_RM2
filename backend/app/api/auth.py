@@ -9,7 +9,8 @@ from app.schemas.auth import (
     GoogleLoginRequest,
     ChangePasswordRequest,
     SendOTPRequest,
-    VerifyOTPRequest
+    VerifyOTPRequest,
+    RequestFlatRequest
 )
 from app.api.deps import get_current_user, active_account_required
 from app.models import User
@@ -59,6 +60,24 @@ def register(request: Request, data: RegisterResidentRequest, db: Session = Depe
         "data": user,
         "error": None
     }
+
+
+@router.post("/request-flat")
+def request_flat(
+    data: RequestFlatRequest,
+    current_user: User = Depends(active_account_required),
+    db: Session = Depends(get_db)
+):
+    current_user.requested_flat_id = data.flat_id
+    current_user.status = "pending_verification"
+    db.commit()
+    return {
+        "success": True,
+        "message": "Flat request submitted successfully. Pending admin approval.",
+        "data": current_user.to_dict(),
+        "error": None
+    }
+
 
 
 @router.post("/login")

@@ -26,7 +26,7 @@ class FlatUserService:
         flat_user = self.repo.get_by_user(user_id)
         if not flat_user:
             raise NotFoundError("Flat assignment for this user")
-        return self.repo.get_all_by_flat(flat_user.flat_id)
+        return self.repo.get_active_by_flat(flat_user.flat_id)
 
     def add_primary(self, data: dict):
         """
