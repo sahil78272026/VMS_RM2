@@ -1,0 +1,3 @@
+## 2024-08-21 - [Backend] Mitigating N+1 Queries in SQLAlchemy Serialization
+**Learning:** The SQLAlchemy models rely on `to_dict()` methods for clean API response serialization. However, when these models involve lazy-loaded relationships (like `VisitorLog` referencing `visitor`, `flat`, `flat_user`), accessing these properties in `to_dict()` loops triggers massive N+1 query bottlenecks on lists.
+**Action:** Always apply `joinedload` eager loading in the initial repository queries when fetching models that will be bulk-serialized via `to_dict()`. Use a reusable `_base_query` wrapper inside repositories to enforce this consistently across all fetch methods.
