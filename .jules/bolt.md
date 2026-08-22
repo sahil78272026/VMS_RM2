@@ -1,0 +1,3 @@
+## 2024-05-18 - [SQLAlchemy to_dict() Serialization N+1 Queries]
+**Learning:** The backend SQLAlchemy models have a recurring pattern where `to_dict()` is used to serialize models for JSON responses. In models with many relationships (like `VisitorLog`), calling `to_dict()` on a list of models without eager loading triggers multiple lazy-loading queries per log, causing severe N+1 performance degradation.
+**Action:** Always implement a `_base_query` (or similar pattern) in the repository that uses `joinedload()` to eager load all relationships that will be accessed during model serialization (e.g. `visitor`, `flat`, `flat_user`, etc).
