@@ -1,0 +1,3 @@
+## 2024-05-24 - Eager Loading in VisitorLogRepository
+**Learning:** The backend SQLAlchemy models have a recurring architectural pattern where `to_dict()` serialization triggers N+1 query performance bottlenecks on lazy-loaded relationships. Specifically, for `VisitorLog`, serializing the model fetched all related entities (`visitor`, `flat`, `flat_user`, `entry_gate`, etc) one by one.
+**Action:** Always apply `joinedload` eager loading in repository queries when retrieving collections of models that will subsequently be serialized via `to_dict()`. Ensure deeply nested relationships (like `flat_user.user`) are also joined using `.joinedload()`.
