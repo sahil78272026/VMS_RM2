@@ -96,8 +96,16 @@ async def get_pending(request: Request, db: Session = Depends(get_db), current_u
             return error("Guard profile not found", "NOT_FOUND", status_code=404)
             
         from datetime import datetime, timedelta
+        from sqlalchemy.orm import joinedload
+        from app.models import FlatUser
         
-        pending_records = db.query(VisitorLog).filter(
+        pending_records = db.query(VisitorLog).options(
+            joinedload(VisitorLog.visitor),
+            joinedload(VisitorLog.flat),
+            joinedload(VisitorLog.flat_user),
+            joinedload(VisitorLog.entry_gate),
+            joinedload(VisitorLog.approved_by_flat_user).joinedload(FlatUser.user)
+        ).filter(
             VisitorLog.society_id == guard.society_id,
             VisitorLog.status.in_(["pending", "approved"])
         ).order_by(VisitorLog.created_at.desc()).all()
