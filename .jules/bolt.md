@@ -1,0 +1,3 @@
+## 2024-05-24 - N+1 Query Bottleneck in to_dict() Serialization
+**Learning:** The backend SQLAlchemy models have a recurring architectural pattern where calling `to_dict()` for JSON serialization accesses lazy-loaded relationships. When fetching lists of items (e.g., in `VisitorLogRepository`), this triggers severe N+1 query performance bottlenecks.
+**Action:** When fetching lists of records from repositories that will be serialized via `to_dict()`, always explicitly use `joinedload` for the relationships accessed inside `to_dict()` to eagerly load dependencies and mitigate the N+1 queries.
