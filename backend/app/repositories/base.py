@@ -8,14 +8,18 @@ class BaseRepository:
         self.model = model
         self.db = db
 
+    def _base_query(self):
+        """Helper to allow eager loading configuration by subclasses."""
+        return self.db.query(self.model)
+
     def get_by_id(self, id: int):
-        return self.db.query(self.model).get(id)
+        return self._base_query().get(id)
 
     def get_all(self):
-        return self.db.query(self.model).all()
+        return self._base_query().all()
 
     def paginate(self, page: int = 1, per_page: int = 20, query=None):
-        q = query if query is not None else self.db.query(self.model)
+        q = query if query is not None else self._base_query()
         total = q.count()
         pages = math.ceil(total / per_page)
         items = q.offset((page - 1) * per_page).limit(per_page).all()
