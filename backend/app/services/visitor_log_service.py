@@ -309,7 +309,7 @@ class VisitorLogService:
 
     def approve(self, log_id: int, flat_user_id: int) -> VisitorLog:
         """Resident approves a visitor entry request."""
-        log = self.log_repo.get_by_id(log_id)
+        log = self.log_repo.get_by_id(log_id, load_relations=True)
         if not log:
             raise NotFoundError("Visitor log")
 
@@ -338,7 +338,7 @@ class VisitorLogService:
 
     def deny(self, log_id: int, flat_user_id: int) -> VisitorLog:
         """Resident denies a visitor entry request."""
-        log = self.log_repo.get_by_id(log_id)
+        log = self.log_repo.get_by_id(log_id, load_relations=True)
         if not log:
             raise NotFoundError("Visitor log")
 
@@ -364,7 +364,7 @@ class VisitorLogService:
 
     def force_approve(self, log_id: int, guard_id: int, reason: str) -> VisitorLog:
         """Guard forcefully approves a visitor if the resident has allowed it."""
-        log = self.log_repo.get_by_id(log_id)
+        log = self.log_repo.get_by_id(log_id, load_relations=True)
         if not log:
             raise NotFoundError("Visitor log")
 
@@ -394,7 +394,7 @@ class VisitorLogService:
         return log
 
     def confirm_entry(self, log_id: int, guard_id: int, data: dict = None) -> VisitorLog:
-        log = self.log_repo.get_by_id(log_id)
+        log = self.log_repo.get_by_id(log_id, load_relations=True)
         if not log:
             raise NotFoundError("Visitor log")
 
@@ -420,7 +420,7 @@ class VisitorLogService:
         return log
 
     def confirm_exit(self, log_id: int, confirmed_by: str, gate_id: int = None) -> VisitorLog:
-        log = self.log_repo.get_by_id(log_id)
+        log = self.log_repo.get_by_id(log_id, load_relations=True)
         if not log:
             raise NotFoundError("Visitor log")
 
@@ -440,7 +440,7 @@ class VisitorLogService:
         return log
 
     def confirm_departure_by_resident(self, log_id: int, flat_user_id: int) -> VisitorLog:
-        log = self.log_repo.get_by_id(log_id)
+        log = self.log_repo.get_by_id(log_id, load_relations=True)
         if not log:
             raise NotFoundError("Visitor log")
 
